@@ -1,7 +1,15 @@
 # bitx-gps-station
 
 Sets the clock and the grid square from a GPS on an sBitx or zBitx, running
-either the original sbitx software or the refactored zbitxre.
+either the original sbitx software or the refactored zbitxre, and keeps
+the ham programs running on its desktop on the same grid square.
+
+It has two parts, in one package:
+
+- `gps-station`: a system service for the clock and the radio's grid
+- `gps-station-desktop`: a tray icon that watches WSJT-X, JS8Call and
+  the other programs running on the desktop; it starts when you log in
+  to the desktop, so a radio without one simply doesn't run it
 
 ## What it does
 
@@ -32,6 +40,72 @@ reads back:
 A new grid is sent only after it has held for a minute, so a fix
 wandering along a grid line doesn't flip it back and forth, and a grid you
 type on the radio yourself is left alone until you move.
+
+## The desktop programs
+
+The tray icon starts when you log in to the radio's desktop and
+puts a GPS icon in the panel's tray: green when every ticked program has
+the GPS grid, amber when one doesn't, grey with no fix. Clicking it opens
+a window, kept off the taskbar, showing the GPS grid, the receiver's
+state (no fix, 2D or 3D fix; satellites used, heard with any signal and
+in view; the strongest signal) and a row for each supported program that
+is running. The window stays above the radio's full-screen window:
+
+```text
+GPS: FN31pr
+3D fix: 7 used, 9 heard of 11 in view (best 41 dB-Hz)
+[x] Radio (zbitxre)  ✓ FN31pr                  [Update]
+[x] WSJT-X           ✗ AA11AA stale            [Update]
+[x] JS8Call          ✋ FN42aa set by hand     [Update]
+[ ] fldigi           ? can't read              [Update]
+```
+
+Only programs that are running are looked at; a closed program is left
+alone, because the radio may have moved by the time it is opened again.
+Every 10 seconds each row is marked:
+
+| Mark | Meaning                                                            |
+| ---- | ------------------------------------------------------------------ |
+| ✓    | it has the GPS grid                                                |
+| ✗    | stale: it hasn't had the GPS grid since it started or the GPS moved |
+| ✋   | set by hand: it had the GPS grid, then somebody changed it         |
+| ?    | it can't report its grid while running                             |
+
+Only ticked programs are changed. A ticked program with a stale grid is
+updated; a grid set by hand is kept until the GPS moves to another square
+or you press **Update**, which sends the GPS grid at once, ticked or not.
+When a ticked program can't be updated, a desktop notification says why,
+once each time the program is started. The ticks are kept in
+`~/.config/gps-station/apps.json`; a program seen for the first time
+starts unticked.
+
+What each program allows while it is running:
+
+| Program     | Read  | Set   | Settings needed in the program               |
+| ----------- | ----- | ----- | -------------------------------------------- |
+| Radio       | yes   | yes   | none                                         |
+| WSJT-X      | yes   | yes   | Accept UDP requests; AutoGrid next to My Grid |
+| JS8Call     | yes   | yes   | TCP server API on; Accept TCP requests        |
+| JTDX        | yes   | no    | none; set My Grid by hand                    |
+| fldigi      | no    | no    | none; check Configure, Operator              |
+| QSSTV       | no    | no    | none; check its configuration                |
+| GridTracker | —     | —     | follows WSJT-X / JTDX                        |
+
+WSJT-X and JTDX are heard on the UDP address they send to (Settings,
+Reporting, UDP Server). GridTracker normally listens on that address too,
+and only one program can listen on a plain address such as
+`127.0.0.1:2237`; the WSJT-X row then says the port is taken. To share
+it, use a multicast address, which any number of programs can hear:
+
+1. WSJT-X (and JTDX): Settings, Reporting: UDP Server `239.255.0.1`,
+   port `2237`, Outgoing interfaces `lo`.
+2. GridTracker2: turn on Multicast and give it the same address.
+
+gps-station-desktop reads the address from WSJT-X's settings and joins
+the group on every interface, so it needs no setting of its own.
+
+The radio's row reads the radio over port 8081; the radio is kept up to
+date by the `gps-station` service whether or not anyone is logged in.
 
 ## Requirements
 
@@ -68,7 +142,10 @@ then:
 sudo apt install ./gps-station_*_all.deb
 ```
 
-Either way, the service is enabled and started on install. Watch it with:
+Either way, the service is enabled and started on install, and the tray
+icon starts at your next desktop login (or run `gps-station-desktop`).
+The tray icon needs `python3-gi` and GTK 3, which the package recommends
+and Raspberry Pi OS desktop images already have. Watch the service with:
 
 ```sh
 journalctl -u gps-station -f
@@ -77,7 +154,8 @@ journalctl -u gps-station -f
 ### By hand, without a package
 
 ```sh
-sudo install -m 755 src/gps_station.py /usr/sbin/gps-station
+sudo install -D -m 755 src/gps_station.py /usr/lib/gps-station/gps_station.py
+sudo ln -s ../lib/gps-station/gps_station.py /usr/sbin/gps-station
 sudo install -m 644 debian/gps-station.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now gps-station
@@ -98,6 +176,10 @@ the service after changing it.
 | `--conf PATH`       | ntpsec config (`/etc/ntpsec/ntp.conf`)        |
 | `--service NAME`    | ntpsec's systemd unit (`ntpsec`)              |
 | `--dry-run`         | change nothing; log what it would do          |
+
+`gps-station-desktop` takes `--radio`, `--gpsd` and `--chars` too. To
+give it options, copy `/etc/xdg/autostart/gps-station-desktop.desktop` to
+`~/.config/autostart/` and add them to its `Exec=` line.
 
 The time job needs root (it reads gpsd's root-only shared memory and
 edits `ntp.conf`); the service runs as root. The grid job alone needs no

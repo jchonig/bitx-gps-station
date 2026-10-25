@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=GPS Grid
+Comment=Keep running ham programs on the GPS grid square
+Exec=gps-station-desktop
+Icon=gps-station
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

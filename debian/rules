@@ -1,5 +1,7 @@
 #!/usr/bin/make -f
 
+LIB := usr/lib/gps-station
+
 %:
 	dh $@
 
@@ -10,5 +12,23 @@ override_dh_auto_build override_dh_auto_clean:
 override_dh_auto_test:
 
 override_dh_auto_install:
-	install -D -m 755 src/gps_station.py debian/gps-station/usr/sbin/gps-station
-	sed -i '1s|^#!.*|#!/usr/bin/python3|' debian/gps-station/usr/sbin/gps-station
+	install -D -m 755 src/gps_station.py debian/gps-station/$(LIB)/gps_station.py
+	install -d debian/gps-station/usr/sbin
+	ln -s ../lib/gps-station/gps_station.py debian/gps-station/usr/sbin/gps-station
+	install -D -m 644 src/gps_station_apps.py \
+		debian/gps-station/$(LIB)/gps_station_apps.py
+	install -D -m 755 src/gps_station_desktop.py \
+		debian/gps-station/$(LIB)/gps_station_desktop.py
+	install -d debian/gps-station/usr/bin
+	ln -s ../lib/gps-station/gps_station_desktop.py \
+		debian/gps-station/usr/bin/gps-station-desktop
+	install -D -m 644 desktop/gps-station-desktop.desktop \
+		debian/gps-station/usr/share/applications/gps-station-desktop.desktop
+	install -D -m 644 desktop/gps-station-desktop-autostart.desktop \
+		debian/gps-station/etc/xdg/autostart/gps-station-desktop.desktop
+	install -d debian/gps-station/usr/share/icons/hicolor/scalable/apps
+	install -m 644 desktop/icons/*.svg \
+		debian/gps-station/usr/share/icons/hicolor/scalable/apps/
+	sed -i '1s|^#!.*|#!/usr/bin/python3|' \
+		debian/gps-station/$(LIB)/gps_station.py \
+		debian/gps-station/$(LIB)/gps_station_desktop.py

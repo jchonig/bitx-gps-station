@@ -12,9 +12,13 @@ Rules-Requires-Root: no
 Package: gps-station
 Architecture: all
 Depends: ${misc:Depends}, python3 (>= 3.9), gpsd
-Recommends: ntpsec
+Recommends: ntpsec, python3-gi, gir1.2-gtk-3.0, gir1.2-notify-0.7, zenity
 Description: GPS time for ntpsec and grid square for the sBitx/zBitx
  Watches gpsd on an sBitx or zBitx transceiver. Once the GPS has a fix it
  adds the GPS as a refclock to ntpsec, calibrates its NMEA delay against
  network time when the network is up, and sets the radio's grid square
  (Maidenhead locator) in the sbitx or zbitxre software over its TCP port.
+ .
+ On the desktop, a tray icon finds running WSJT-X, JTDX, JS8Call, fldigi,
+ QSSTV and GridTracker, shows whether each one's grid square matches the
+ GPS, and updates the ones you tick that can be changed while running.

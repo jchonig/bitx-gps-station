@@ -75,13 +75,19 @@ def maidenhead(lat, lon, chars=6):
 # ---------------------------------------------------------------- gpsd
 
 class Gpsd:
-    """A watching client of gpsd that hands back fixes as they come."""
+    """A watching client of gpsd that hands back fixes as they come.
+
+    Also keeps the receiver's state for display: mode (0/1 no fix, 2 = 2D,
+    3 = 3D); satellites in view, heard (any signal) and used; and the best
+    signal in dB-Hz. Each is None until gpsd says."""
 
     def __init__(self, addr):
         self.addr = addr
         self.sock = None
         self.buf = b""
         self.next_try = 0.0
+        self.mode = None
+        self.seen = self.heard = self.used = self.best = None
 
     def _connect(self):
         if time.monotonic() < self.next_try:
@@ -118,6 +124,7 @@ class Gpsd:
             log("gpsd: connection lost")
             self.sock.close()
             self.sock = None
+            self.mode = self.seen = self.heard = self.used = self.best = None
             self.next_try = time.monotonic() + RADIO_RETRY_S
             return None
         self.buf += data
@@ -127,10 +134,23 @@ class Gpsd:
                 msg = json.loads(line)
             except ValueError:
                 continue
-            if msg.get("class") == "TPV" and msg.get("mode", 0) >= 2 \
-                    and "lat" in msg and "lon" in msg:
-                fix = (msg["lat"], msg["lon"])
+            if msg.get("class") == "TPV":
+                self.mode = msg.get("mode", 0)
+                if self.mode >= 2 and "lat" in msg and "lon" in msg:
+                    fix = (msg["lat"], msg["lon"])
+            elif msg.get("class") == "SKY":
+                self._sky(msg)
         return fix
+
+    def _sky(self, msg):
+        sats = msg.get("satellites")
+        if sats is None:
+            return                        # a partial SKY: keep what we had
+        self.seen = msg.get("nSat", len(sats))
+        self.used = msg.get("uSat", sum(1 for s in sats if s.get("used")))
+        signals = [s.get("ss") or 0 for s in sats]
+        self.heard = sum(1 for ss in signals if ss > 0)
+        self.best = max(signals, default=0)
 
 
 # ---------------------------------------------------------------- radio

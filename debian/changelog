@@ -1,5 +1,7 @@
 gps-station (0.1.0) stable; urgency=medium
 
   * First packaged release.
+  * gps-station-desktop: tray icon that shows and keeps the grid square of
+    running ham programs (radio, WSJT-X, JTDX, JS8Call, fldigi, QSSTV).
 
  -- Jeffrey Honig <jch@honig.net>  Sat, 24 Oct 2026 22:00:00 -0400

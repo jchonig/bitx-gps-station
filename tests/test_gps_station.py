@@ -169,7 +169,8 @@ def test_gpsd_poll_returns_last_fix():
         {"class": "VERSION", "release": "3.22"},
         {"class": "TPV", "mode": 1},
         {"class": "TPV", "mode": 3, "lat": 10.0, "lon": 20.0},
-        {"class": "SKY"},
+        {"class": "SKY", "nSat": 3, "uSat": 1, "satellites": [
+            {"ss": 31.0, "used": True}, {"ss": 22.0}, {"ss": 0.0}]},
         {"class": "TPV", "mode": 2, "lat": 41.714775, "lon": -72.72726},
     ]
 
@@ -194,6 +195,15 @@ def test_gpsd_poll_returns_last_fix():
         t.join(5)
         srv.close()
     assert fix == (41.714775, -72.72726)
+    assert (g.mode, g.seen, g.heard, g.used, g.best) == (2, 3, 2, 1, 31.0)
+
+
+def test_gpsd_sky_from_satellite_list():
+    g = gs.Gpsd(None)
+    g._sky({"class": "SKY", "satellites": [{"used": True, "ss": 30}, {"ss": 0}, {}]})
+    assert (g.seen, g.heard, g.used, g.best) == (3, 1, 1, 30)
+    g._sky({"class": "SKY"})                     # partial SKY: keep what we had
+    assert (g.seen, g.heard, g.used, g.best) == (3, 1, 1, 30)
 
 
 # ---------------------------------------------------------------- ntp.conf
