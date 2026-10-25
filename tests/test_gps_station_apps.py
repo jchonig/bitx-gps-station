@@ -27,9 +27,14 @@ def test_running(tmp_path):
     proc(10, ["/usr/bin/wsjtx"])
     proc(11, ["/opt/GridTracker2/gridtracker2", "--no-sandbox"])
     proc(12, ["JS8Call"])
+    proc(14, ["/bin/bash", "/opt/GridTracker2/gridtracker2"])
+    proc(15, ["/usr/bin/python3", "-u", "x.py"])
     (tmp_path / "13").mkdir()                     # kernel thread: no cmdline file
     (tmp_path / "self").mkdir()
-    assert ga.running(str(tmp_path)) == {"wsjtx": 10, "gridtracker2": 11, "js8call": 12}
+    found = ga.running(str(tmp_path))
+    assert found == {"wsjtx": 10, "gridtracker2": found["gridtracker2"], "js8call": 12,
+                     "bash": 14, "python3": 15}
+    assert found["gridtracker2"] in (11, 14)
 
 
 INI = """\

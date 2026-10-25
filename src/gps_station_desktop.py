@@ -157,7 +157,7 @@ class Window(Gtk.Window):
     def _add_row(self, row, n):
         check = Gtk.CheckButton()
         check.set_active(row["ticked"])
-        check.set_sensitive(row["tickable"])
+        check.set_no_show_all(not row["tickable"])    # information-only rows
         check.connect("toggled",
                       lambda b, k=row["key"]: self.settings.set_ticked(k, b.get_active()))
         name = Gtk.Label(xalign=0)
@@ -168,6 +168,7 @@ class Window(Gtk.Window):
         button = Gtk.Button(label="Update", valign=Gtk.Align.CENTER)
         check.set_valign(Gtk.Align.CENTER)
         button.connect("clicked", lambda b, k=row["key"]: self.worker.commands.put(k))
+        button.set_no_show_all(not row["tickable"])
         for col, w in enumerate((check, name, status, button)):
             self.grid.attach(w, col, n, 1, 1)
         self.grid.show_all()
@@ -178,13 +179,17 @@ class Window(Gtk.Window):
     def _fill(self, w, row):
         w["name"].set_text(row["title"])
         mark, word = MARK[row["status"]], WORD[row["status"]]
+        if not row["tickable"]:
+            mark, word = "", ""
         text = " ".join(x for x in (mark, row["grid"] or "", word) if x)
+        lines = [GLib.markup_escape_text(text)] if text else []
         if row["why"] and row["status"] != apps.STOPPED:
-            text += f"\n<small>{GLib.markup_escape_text(row['why'])}</small>"
-        w["status"].set_markup(text if "<small>" in text else GLib.markup_escape_text(text))
+            lines.append(f"<small>{GLib.markup_escape_text(row['why'])}</small>")
+        w["status"].set_markup("\n".join(lines))
         settable = row["writable"] and row["running"] and row["status"] != apps.MATCH
         w["button"].set_sensitive(settable)
         w["button"].set_visible(row["tickable"])
+        w["check"].set_visible(row["tickable"])
         tip = None if row["writable"] else (row["why"] or "can't be changed while running")
         w["button"].set_tooltip_text(tip)
 

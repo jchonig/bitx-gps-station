@@ -64,8 +64,12 @@ def grids_match(a, b):
     return a.startswith(b) if len(a) >= len(b) else b.startswith(a)
 
 
+INTERPRETERS = {"sh", "bash", "dash", "python3", "python", "perl"}
+
+
 def running(proc="/proc"):
-    """Map of running programs' names (basename of argv[0], lower case) to a pid."""
+    """Map of running programs' names (basename of argv[0], lower case) to a pid.
+    For a script run by an interpreter, the script's name is listed too."""
     found = {}
     try:
         pids = os.listdir(proc)
@@ -76,12 +80,15 @@ def running(proc="/proc"):
             continue
         try:
             with open(os.path.join(proc, pid, "cmdline"), "rb") as f:
-                argv0 = f.read().split(b"\0", 1)[0]
+                argv = f.read().decode("utf-8", "replace").split("\0")
         except OSError:
             continue
-        name = os.path.basename(argv0.decode("utf-8", "replace")).lower()
-        if name:
-            found.setdefault(name, int(pid))
+        names = [os.path.basename(argv[0]).lower()]
+        if names[0] in INTERPRETERS and len(argv) > 1 and not argv[1].startswith("-"):
+            names.append(os.path.basename(argv[1]).lower())
+        for name in names:
+            if name:
+                found.setdefault(name, int(pid))
     return found
 
 
@@ -495,7 +502,7 @@ class Qsstv(App):
 class GridTracker(App):
     key = "gridtracker"
     title = "GridTracker"
-    procs = ("gridtracker2", "gridtracker")
+    procs = ("gridtracker2.bin", "gridtracker2", "gridtracker")
     tickable = False
 
     def read(self):
