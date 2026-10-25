@@ -112,7 +112,8 @@ Time: synced over the Internet to 192.0.2.10 (offset +0.4 ms); GPS standing by
 ```
 
 The window's **About** button (also on the tray icon's right-click
-menu) shows the release number and a link to this repository;
+menu) shows the release number and links to this repository and
+the author's page;
 `gps-station --version` and `gps-station-desktop --version` print it.
 
 Only programs that are running are looked at; a closed program is left

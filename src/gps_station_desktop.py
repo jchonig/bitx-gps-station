@@ -295,6 +295,21 @@ class Window(Gtk.Window):
         w["button"].set_tooltip_text(tip)
 
 
+AUTHOR_URL = "https://n2vlv.net"
+
+
+def find_label(widget, text):
+    """The Gtk.Label showing text somewhere inside widget, or None."""
+    if isinstance(widget, Gtk.Label) and widget.get_text() == text:
+        return widget
+    if isinstance(widget, Gtk.Container):
+        for child in widget.get_children():
+            found = find_label(child, text)
+            if found:
+                return found
+    return None
+
+
 def show_about(parent):
     d = Gtk.AboutDialog(transient_for=parent, modal=True)
     d.set_program_name("gps-station")
@@ -304,9 +319,17 @@ def show_about(parent):
     d.set_website(gs.HOMEPAGE)
     d.set_website_label("github.com/jchonig/bitx-gps-station")
     d.set_license_type(Gtk.License.BSD_3)
-    d.set_copyright("© 2026 Jeffrey Honig")
+    copyright = "© 2026 Jeffrey Honig, N2VLV · n2vlv.net"
+    d.set_copyright(copyright)
+    d.set_authors([f"Jeffrey Honig, N2VLV {AUTHOR_URL}"])
     d.set_logo_icon_name("gps-station")
     d.set_keep_above(True)
+    d.set_skip_taskbar_hint(True)
+    # The copyright line is plain text; make n2vlv.net in it a link.
+    label = find_label(d, copyright)
+    if label:
+        label.set_markup(GLib.markup_escape_text(copyright[:-len("n2vlv.net")])
+                         + f'<a href="{AUTHOR_URL}">n2vlv.net</a>')
     d.run()
     d.destroy()
 
