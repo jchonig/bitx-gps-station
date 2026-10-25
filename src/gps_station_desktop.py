@@ -25,10 +25,12 @@ import subprocess
 import threading
 import time
 
+import cairo
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk  # noqa: E402
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GLib, Gtk  # noqa: E402
 
 import gps_station as gs  # noqa: E402
 import gps_station_apps as apps  # noqa: E402
@@ -41,7 +43,7 @@ except (ValueError, ImportError):
 
 CHECK_S = 10              # between looks at the running programs
 
-ICONS = {"ok": "gps-station-ok", "differs": "gps-station-differs", "nofix": "gps-station-nofix"}
+ICONS = {"differs": "gps-station-differs"}     # for notifications
 
 MARK = {
     apps.MATCH: "✓",
@@ -108,6 +110,7 @@ class Worker(threading.Thread):
                 self.tracker.update(self.gps.grid, apps.running())
             state = {"grid": self.gps.grid, "candidate": self.gps.candidate,
                      "fix": self.gps.has_fix(), "receiver": self.gps.receiver(),
+                     "mode": self.gps.gpsd.mode if self.gps.has_fix() else None,
                      "sats": list(self.gps.gpsd.sats), "time": apps.read_ntp_status(),
                      "rows": self.tracker.snapshot()}
             GLib.idle_add(self.on_update, state)
@@ -193,7 +196,7 @@ class Window(Gtk.Window):
         self.settings = settings
         self.worker = worker
         self.set_border_width(12)
-        self.set_icon_name(ICONS["nofix"])
+        self.set_icon(render_icon("none", "none", False))
         self.set_skip_taskbar_hint(True)      # it lives in the tray
         self.set_skip_pager_hint(True)
         self.set_keep_above(True)             # the radio's own window is full-screen
@@ -324,23 +327,58 @@ def sky_legend(sats):
     return "\n".join(lines) + "</small>"
 
 
-def overall(state):
-    """(icon key, tooltip) for the tray icon and the window."""
-    rows = [r for r in state["rows"] if r["running"] and r["ticked"]]
-    if state["grid"] is None:
-        return "nofix", f"GPS grid: no fix yet ({state['receiver']})"
-    off = [r["title"] for r in rows if r["status"] != apps.MATCH]
-    if off:
-        return "differs", f"GPS grid {state['grid']}; not matching: {', '.join(off)}"
-    return "ok", f"GPS grid {state['grid']}"
+FIX_COLOURS = {"none": (0.55, 0.55, 0.55), "2d": (0.18, 0.43, 0.71), "3d": (0.18, 0.55, 0.24)}
+TIME_COLOURS = {"gps": (0.18, 0.65, 0.24), "net": (0.18, 0.43, 0.85), "none": (0.85, 0.15, 0.15)}
+
+
+def render_icon(fix, time_, differs, size=64):
+    """The tray icon: a GPS crosshair coloured by the fix, a dot at the
+    bottom right for the time source, and a "!" at the top right when a
+    ticked program's grid differs."""
+    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, size, size)
+    cr = cairo.Context(surface)
+    c, r = size / 2, size * 0.40
+    cr.set_source_rgb(*FIX_COLOURS[fix])
+    cr.arc(c, c, r, 0, 6.2832)
+    cr.fill()
+    cr.set_source_rgb(1, 1, 1)
+    cr.set_line_width(size * 0.06)
+    cr.arc(c, c, r * 0.6, 0, 6.2832)
+    cr.stroke()
+    for x0, y0, x1, y1 in ((c, c - r, c, c - r * 0.35), (c, c + r * 0.35, c, c + r),
+                           (c - r, c, c - r * 0.35, c), (c + r * 0.35, c, c + r, c)):
+        cr.move_to(x0, y0)
+        cr.line_to(x1, y1)
+    cr.stroke()
+
+    def badge(x, y, colour):
+        cr.new_path()
+        cr.set_source_rgb(1, 1, 1)
+        cr.arc(x, y, size * 0.19, 0, 6.2832)
+        cr.fill()
+        cr.set_source_rgb(*colour)
+        cr.arc(x, y, size * 0.15, 0, 6.2832)
+        cr.fill()
+
+    badge(size * 0.80, size * 0.80, TIME_COLOURS[time_])
+    if differs:
+        badge(size * 0.80, size * 0.20, (0.85, 0.55, 0.0))
+        cr.set_source_rgb(1, 1, 1)
+        cr.set_line_width(size * 0.05)
+        cr.move_to(size * 0.80, size * 0.11)
+        cr.line_to(size * 0.80, size * 0.23)
+        cr.stroke()
+        cr.arc(size * 0.80, size * 0.285, size * 0.03, 0, 6.2832)
+        cr.fill()
+    return Gdk.pixbuf_get_from_surface(surface, 0, 0, size, size)
 
 
 class Tray:
     def __init__(self, window):
         self.window = window
-        self.icon = Gtk.StatusIcon.new_from_icon_name(ICONS["nofix"])
+        self.icon = Gtk.StatusIcon.new_from_pixbuf(render_icon("none", "none", False))
         self.icon.set_title("GPS grid")
-        self.icon.set_tooltip_text("GPS grid: no fix yet")
+        self.icon.set_tooltip_text("GPS: starting")
         self.icon.connect("activate", lambda *a: self.toggle())
         self.icon.connect("popup-menu", self.menu)
 
@@ -366,10 +404,16 @@ class Tray:
         m.popup(None, None, Gtk.StatusIcon.position_menu, icon, button, when)
 
     def refresh(self, state):
-        name, tip = overall(state)
-        self.icon.set_from_icon_name(ICONS[name])
-        self.icon.set_tooltip_text(tip)
-        self.window.set_icon_name(ICONS[name])
+        fix, time_, differs, tip = apps.icon_state(
+            state["mode"], state["grid"] is not None, state["time"][0], state["rows"])
+        key = (fix, time_, differs)
+        if key != getattr(self, "shown", None):
+            self.shown = key
+            pixbuf = render_icon(fix, time_, differs)
+            self.icon.set_from_pixbuf(pixbuf)
+            self.window.set_icon(pixbuf)
+        grid = f"GPS grid {state['grid']} · " if state["grid"] else ""
+        self.icon.set_tooltip_text(grid + tip)
 
 
 def main():

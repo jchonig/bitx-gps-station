@@ -165,6 +165,27 @@ def gs_include(calibrated):
     return ga.gs.include_text(0, 0.06, calibrated)
 
 
+# ---------------------------------------------------------------- tray icon
+
+
+def row(status, ticked=True, running=True, tickable=True, title="WSJT-X"):
+    return {"status": status, "ticked": ticked, "running": running,
+            "tickable": tickable, "title": title}
+
+
+def test_icon_state():
+    assert ga.icon_state(None, False, "down", []) == (
+        "none", "none", False, "no fix · time not synced · no grid yet")
+    assert ga.icon_state(3, True, "gps", [row(ga.MATCH)]) == (
+        "3d", "gps", False, "3D fix · time from GPS · all programs match")
+    fix, time_, differs, tip = ga.icon_state(
+        2, True, "net", [row(ga.STALE), row(ga.MANUAL, ticked=False, title="JS8Call"),
+                         row(ga.UNKNOWN, tickable=False, title="GridTracker"),
+                         row(ga.STALE, running=False, title="JTDX")])
+    assert (fix, time_, differs) == ("2d", "net", True)
+    assert tip == "2D fix · time over the Internet · not matching: WSJT-X"
+
+
 # ---------------------------------------------------------------- WSJT-X protocol
 
 

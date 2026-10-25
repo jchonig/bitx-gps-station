@@ -12,7 +12,8 @@ Rules-Requires-Root: no
 Package: gps-station
 Architecture: all
 Depends: ${misc:Depends}, python3 (>= 3.9), gpsd, iproute2
-Recommends: ntpsec, python3-gi, gir1.2-gtk-3.0, gir1.2-notify-0.7, zenity
+Recommends: ntpsec, python3-gi, python3-gi-cairo, python3-cairo, gir1.2-gtk-3.0,
+            gir1.2-notify-0.7, zenity
 Description: GPS time for ntpsec and grid square for the sBitx/zBitx
  Watches gpsd on an sBitx or zBitx transceiver. Once the GPS has a fix it
  adds the GPS as a refclock to ntpsec, calibrates its NMEA delay against

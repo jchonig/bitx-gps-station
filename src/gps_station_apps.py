@@ -674,6 +674,27 @@ def read_ntp_status():
     return ntp_status(read_ntpq(), text)
 
 
+# ---------------------------------------------------------------- the tray icon
+
+def icon_state(mode, has_grid, time_kind, rows):
+    """What the tray icon shows, and its tooltip.
+
+    Returns (fix, time, differs, tooltip): fix is "none", "2d" or "3d";
+    time is "gps", "net" or "none"; differs is True when a ticked, running
+    program's grid isn't the GPS grid."""
+    fix = {2: "2d", 3: "3d"}.get(mode, "none")
+    time_ = time_kind if time_kind in ("gps", "net") else "none"
+    off = [r["title"] for r in rows
+           if r["running"] and r["ticked"] and r["tickable"] and has_grid
+           and r["status"] != MATCH]
+    parts = [{"none": "no fix", "2d": "2D fix", "3d": "3D fix"}[fix],
+             {"gps": "time from GPS", "net": "time over the Internet",
+              "none": "time not synced"}[time_],
+             ("not matching: " + ", ".join(off)) if off else
+             ("all programs match" if has_grid else "no grid yet")]
+    return fix, time_, bool(off), " · ".join(parts)
+
+
 # ---------------------------------------------------------------- tracking
 
 class Row:

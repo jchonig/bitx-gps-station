@@ -55,8 +55,11 @@ type on the radio yourself is left alone until you move.
 ## The desktop programs
 
 The tray icon starts when you log in to the radio's desktop and
-puts a GPS icon in the panel's tray: green when every ticked program has
-the GPS grid, amber when one doesn't, grey with no fix. Clicking it opens
+puts a GPS icon in the panel's tray. The crosshair shows the fix (grey
+none, blue 2D, green 3D); a dot at its bottom right shows where the time
+comes from (green the GPS, blue the Internet, red not synchronized); an
+amber "!" at the top right means a ticked program's grid differs from the
+GPS. Its tooltip says the same in words. Clicking it opens
 a window, kept off the taskbar, showing the GPS grid, the receiver's
 state (no fix, 2D or 3D fix; satellites used, heard with any signal and
 in view; the strongest signal) and a row for each supported program that
