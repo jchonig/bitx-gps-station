@@ -79,7 +79,10 @@ class Gpsd:
 
     Also keeps the receiver's state for display: mode (0/1 no fix, 2 = 2D,
     3 = 3D); satellites in view, heard (any signal) and used; and the best
-    signal in dB-Hz. Each is None until gpsd says."""
+    signal in dB-Hz. Each is None until gpsd says.
+
+    shm_unit is the NTP shared-memory unit gpsd writes time to, from its
+    TOFF messages: -1 means gpsd has none (it wasn't started with -n)."""
 
     def __init__(self, addr):
         self.addr = addr
@@ -88,13 +91,14 @@ class Gpsd:
         self.next_try = 0.0
         self.mode = None
         self.seen = self.heard = self.used = self.best = None
+        self.shm_unit = None
 
     def _connect(self):
         if time.monotonic() < self.next_try:
             return False
         try:
             self.sock = socket.create_connection(self.addr, timeout=3)
-            self.sock.sendall(b'?WATCH={"enable":true,"json":true}\n')
+            self.sock.sendall(b'?WATCH={"enable":true,"json":true,"pps":true}\n')
             self.sock.setblocking(False)
             self.buf = b""
             log("gpsd: connected")
@@ -125,6 +129,7 @@ class Gpsd:
             self.sock.close()
             self.sock = None
             self.mode = self.seen = self.heard = self.used = self.best = None
+            self.shm_unit = None
             self.next_try = time.monotonic() + RADIO_RETRY_S
             return None
         self.buf += data
@@ -140,6 +145,10 @@ class Gpsd:
                     fix = (msg["lat"], msg["lon"])
             elif msg.get("class") == "SKY":
                 self._sky(msg)
+            elif msg.get("class") == "TOFF":
+                m = re.fullmatch(r"NTP(-?\d+)", str(msg.get("shm", "")))
+                if m:
+                    self.shm_unit = int(m.group(1))
         return fix
 
     def _sky(self, msg):
@@ -318,6 +327,7 @@ class Ntp:
         self.next_cal = 0.0
         self.samples = []
         self.gave_up = False
+        self.warned_no_shm = False
         self.virtual = None       # the config as a dry run would have left it
 
     def _read(self):
@@ -341,9 +351,16 @@ class Ntp:
         log(f"ntp: {why}; restarting {self.service}")
         subprocess.run(["systemctl", "restart", self.service], check=False)
 
-    def tick(self):
+    def tick(self, shm_unit=None):
+        """shm_unit: the unit gpsd says it writes time to (Gpsd.shm_unit)."""
         if self.gave_up:
             return
+        if shm_unit == -1 and not self.warned_no_shm:
+            log("ntp: gpsd has a fix but isn't writing time to shared memory; "
+                'add -n to GPSD_OPTIONS in /etc/default/gpsd and restart gpsd')
+            self.warned_no_shm = True
+        elif shm_unit is not None and shm_unit >= 0:
+            self.warned_no_shm = False
         now = time.monotonic()
         try:
             text = self._read()
@@ -450,7 +467,7 @@ def main():
             else:
                 next_try = now + RADIO_RETRY_S
         if ntp:
-            ntp.tick()
+            ntp.tick(gpsd.shm_unit)
 
 
 if __name__ == "__main__":

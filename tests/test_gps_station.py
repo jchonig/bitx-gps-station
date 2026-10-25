@@ -198,6 +198,45 @@ def test_gpsd_poll_returns_last_fix():
     assert (g.mode, g.seen, g.heard, g.used, g.best) == (2, 3, 2, 1, 31.0)
 
 
+def test_gpsd_toff_unit():
+    g = gs.Gpsd(None)
+    for shm, unit in (("NTP-1", -1), ("NTP0", 0), ("NTP2", 2)):
+        g.buf = b""
+        g.sock = FakeSock(json.dumps({"class": "TOFF", "shm": shm}).encode() + b"\n")
+        g.poll(0)
+        assert g.shm_unit == unit
+
+
+class FakeSock:
+    def __init__(self, data):
+        self.data = data
+
+    def recv(self, n):
+        data, self.data = self.data, b""
+        return data
+
+
+@pytest.fixture(autouse=True)
+def _select_ready(monkeypatch):
+    real = gs.select.select
+
+    def select(r, w, x, t):
+        if r and isinstance(r[0], FakeSock):
+            return r, [], []
+        return real(r, w, x, t)
+    monkeypatch.setattr(gs.select, "select", select)
+
+
+def test_warns_once_when_gpsd_has_no_shm(ntp, monkeypatch, capsys):
+    monkeypatch.setattr(ntp.shm, "active_unit", lambda: None)
+    ntp.tick(-1)
+    ntp.tick(-1)
+    assert capsys.readouterr().out.count("isn't writing time to shared memory") == 1
+    ntp.tick(0)
+    ntp.tick(-1)
+    assert capsys.readouterr().out.count("isn't writing time to shared memory") == 1
+
+
 def test_gpsd_sky_from_satellite_list():
     g = gs.Gpsd(None)
     g._sky({"class": "SKY", "satellites": [{"used": True, "ss": 30}, {"ss": 0}, {}]})

@@ -118,6 +118,8 @@ date by the `gps-station` service whether or not anyone is logged in.
 - An sBitx or zBitx on Raspberry Pi OS (Bullseye or later; 32- or 64-bit)
 - A GPS receiver that gpsd can read
 - `gpsd`, `python3` (3.9 or later), and `ntpsec` for the time job
+- For the time job, gpsd started with `-n`, so it feeds time to shared
+  memory (see below)
 
 The package is architecture `all`: the same `.deb` installs on 32-bit
 (armhf) and 64-bit (arm64) systems.
@@ -166,6 +168,20 @@ sudo install -m 644 debian/gps-station.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now gps-station
 ```
+
+### gpsd must run with `-n` for the time job
+
+Without `-n`, gpsd hands fixes to programs that ask but never writes time
+to the shared memory ntpsec reads, and the GPS never becomes a time
+source. Add it in `/etc/default/gpsd`:
+
+```sh
+GPSD_OPTIONS="-n"
+```
+
+then `sudo systemctl restart gpsd`. If it is missing, the service says
+so in its log once it has a fix (`journalctl -u gps-station`). The
+package doesn't change gpsd's settings itself.
 
 ## Configuration
 
