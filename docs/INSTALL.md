@@ -77,6 +77,8 @@ package doesn't change gpsd's settings itself.
 
 ## Configuration
 
+`man gps-station` and `man gps-station-desktop` describe both commands.
+
 Options go in `GPS_STATION_ARGS` in `/etc/default/gps-station`; restart
 the service after changing it.
 

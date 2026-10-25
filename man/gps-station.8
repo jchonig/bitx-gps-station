@@ -1,0 +1,118 @@
+.TH GPS-STATION 8 "October 2026" "gps-station" "System Administration"
+.SH NAME
+gps-station \- GPS time for ntpsec and the grid square for an sBitx or zBitx
+.SH SYNOPSIS
+.B gps-station
+.RB [ \-\-radio
+.IR host:port ]
+.RB [ \-\-gpsd
+.IR host:port ]
+.RB [ \-\-chars " 4|6]"
+.RB [ \-\-conf
+.IR path ]
+.RB [ \-\-conf\-dir
+.IR path ]
+.RB [ \-\-service
+.IR name ]
+.RB [ \-\-no\-ntp ]
+.RB [ \-\-no\-grid ]
+.RB [ \-\-dry\-run ]
+.br
+.B gps-station \-\-version
+.SH DESCRIPTION
+.B gps-station
+runs as a systemd service beside
+.BR gpsd (8)
+and does two jobs.
+.PP
+.B Time.
+When gpsd starts writing time to shared memory, it writes a
+.B refclock shm
+line to
+.IR /etc/ntpsec/conf.d/gps-station.conf ,
+adds
+.B includefile /etc/ntpsec/conf.d/
+to the end of
+.I /etc/ntpsec/ntp.conf
+once, and restarts ntpsec.
+The file also sets
+.B tos minsane 1
+so the GPS alone can set the clock without a network.
+Later, while ntpd follows a network server and has heard the GPS for eight
+polls, it measures how late the GPS's NMEA time arrives over ten polls,
+sets that as
+.BR time1 ,
+marks the file calibrated and restarts ntpsec once more.
+If ntp.conf or another file in conf.d already has a refclock shm line,
+ntpsec is left alone.
+gpsd must be started with
+.B \-n
+for its time to reach shared memory; if it isn't, this is logged.
+.PP
+.B Grid.
+It works out the Maidenhead locator from the fix and, once it has held for
+a minute, sets it on the radio over TCP: zbitxre with
+.BR "MYGRID FN31pr" ,
+sbitx with
+.BR "grid FN31pr" .
+It retries until the radio answers and the new grid reads back.
+A grid typed on the radio is left alone until the GPS moves to another
+square.
+.PP
+The time job needs root; the grid job alone does not.
+.SH OPTIONS
+.TP
+.BI \-\-radio " host:port"
+The radio software's TCP port (default 127.0.0.1:8081).
+.TP
+.BI \-\-gpsd " host:port"
+gpsd (default 127.0.0.1:2947).
+.TP
+.BR \-\-chars " 4|6"
+Send a 4- or 6-character grid (default 6).
+.TP
+.BI \-\-conf " path"
+ntpsec's main configuration (default /etc/ntpsec/ntp.conf).
+.TP
+.BI \-\-conf\-dir " path"
+The directory included from it, holding gps-station.conf
+(default /etc/ntpsec/conf.d).
+.TP
+.BI \-\-service " name"
+ntpsec's systemd unit (default ntpsec).
+.TP
+.B \-\-no\-ntp
+Only set the grid.
+.TP
+.B \-\-no\-grid
+Only look after ntpsec.
+.TP
+.B \-\-dry\-run
+Change nothing; log what would be done.
+.TP
+.B \-\-version
+Print the version and exit.
+.SH FILES
+.TP
+.I /etc/default/gps-station
+Options for the service, in
+.BR GPS_STATION_ARGS .
+.TP
+.I /etc/ntpsec/conf.d/gps-station.conf
+The GPS refclock, its time1 and whether it has been calibrated.
+To measure again, change
+.B calibrated=yes
+to
+.B calibrated=no
+and restart the service.
+.TP
+.I /etc/default/gpsd
+Needs
+.BR GPSD_OPTIONS="\-n" .
+.SH SEE ALSO
+.BR gps-station-desktop (1),
+.BR gpsd (8),
+.BR ntpd (8),
+.BR ntpq (1)
+.PP
+https://github.com/jchonig/bitx-gps-station

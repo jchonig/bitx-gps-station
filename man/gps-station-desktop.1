@@ -1,0 +1,63 @@
+.TH GPS-STATION-DESKTOP 1 "October 2026" "gps-station" "User Commands"
+.SH NAME
+gps-station-desktop \- keep running ham programs on the GPS grid square
+.SH SYNOPSIS
+.B gps-station-desktop
+.RB [ \-\-radio
+.IR host:port ]
+.RB [ \-\-gpsd
+.IR host:port ]
+.RB [ \-\-chars " 4|6]"
+.RB [ \-\-show ]
+.br
+.B gps-station-desktop \-\-version
+.SH DESCRIPTION
+A tray icon for the desktop of an sBitx or zBitx, started at login from
+.IR /etc/xdg/autostart .
+The icon's crosshair shows the GPS fix (grey none, blue 2D, green 3D), a
+dot shows where the time comes from (green the GPS, blue the Internet, red
+not synchronized), and an amber "!" appears when a ticked program's grid
+differs from the GPS.
+.PP
+Clicking the icon opens a window with the GPS grid, the receiver's state,
+what the clock follows, a map of the satellites, and a row for each
+supported program that is running: the radio, WSJT-X, JTDX, JS8Call,
+fldigi, QSSTV and GridTracker.
+Each row is marked as matching the GPS, stale, set by hand, or unreadable.
+Only ticked programs are changed: a stale grid is updated, a grid set by
+hand is kept until the GPS moves to another square or
+.B Update
+is pressed.
+When a ticked program can't be updated, a desktop notification says which
+of its settings to change, once per launch.
+Programs that aren't running are never touched.
+.PP
+WSJT-X is updated with a UDP Location message (it needs Accept UDP
+requests and AutoGrid) and JS8Call through its TCP API (TCP server API
+and Accept TCP requests). JTDX, fldigi and QSSTV can't be changed while
+running. To share WSJT-X's UDP stream with GridTracker, send it to a
+multicast address such as 239.255.0.1 on the lo interface.
+.SH OPTIONS
+.TP
+.BI \-\-radio " host:port"
+The radio software's TCP port (default 127.0.0.1:8081).
+.TP
+.BI \-\-gpsd " host:port"
+gpsd (default 127.0.0.1:2947).
+.TP
+.BR \-\-chars " 4|6"
+Grid length (default 6).
+.TP
+.B \-\-show
+Open the window at start.
+.TP
+.B \-\-version
+Print the version and exit.
+.SH FILES
+.TP
+.I ~/.config/gps-station/apps.json
+Which programs are ticked.
+.SH SEE ALSO
+.BR gps-station (8)
+.PP
+https://github.com/jchonig/bitx-gps-station
