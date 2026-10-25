@@ -1,0 +1,15 @@
+[Unit]
+Description=Allow multicast on loopback, for WSJT-X and GridTracker
+Documentation=https://github.com/jchonig/bitx-gps-station
+DefaultDependencies=no
+Before=network-pre.target display-manager.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/ip link set dev lo multicast on
+ExecStop=/usr/sbin/ip link set dev lo multicast off
+
+[Install]
+WantedBy=multi-user.target

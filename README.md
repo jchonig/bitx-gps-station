@@ -101,6 +101,12 @@ it, use a multicast address, which any number of programs can hear:
    port `2237`, Outgoing interfaces `lo`.
 2. GridTracker2: turn on Multicast and give it the same address.
 
+Linux leaves multicast off on the loopback interface, so WSJT-X doesn't
+offer `lo` until it is on. The package's `gps-station-lo-multicast`
+service turns it on at boot (`ip link set dev lo multicast on`); using
+`lo` keeps the stream on the radio and working without Wi-Fi. Restart
+WSJT-X after the first install so it sees the change.
+
 gps-station-desktop reads the address from WSJT-X's settings and joins
 the group on every interface, so it needs no setting of its own.
 
