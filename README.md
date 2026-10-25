@@ -206,24 +206,40 @@ artifact.
 
 The release workflow checks the tag against `debian/changelog`, lints,
 tests, builds the `.deb`, attaches it to a GitHub Release, and publishes
-the signed apt repository to GitHub Pages. The repository serves the
-latest version; older ones remain on the Releases page.
+the signed apt repository to GitHub Pages at
+<https://gps-station.n2vlv.net/>. The repository serves the latest
+version; older ones remain on the Releases page.
 
 One-time setup:
 
-1. Make a signing key with no passphrase, used only for this repository:
+1. Make a signing key with no passphrase, used only for this repository,
+   and store it as the repository secret `APT_SIGNING_KEY`. Keep a backup
+   of the private key and its revocation certificate (gpg writes one to
+   `~/.gnupg/openpgp-revocs.d/`): GitHub can't give the secret back.
 
    ```sh
-   gpg --quick-gen-key "bitx-gps-station apt <jch@honig.net>" \
-       ed25519 sign never
-   gpg --armor --export-secret-keys "bitx-gps-station apt"
+   gpg --batch --passphrase '' --quick-gen-key \
+       "bitx-gps-station APT Repository <jch@honig.net>" rsa4096 sign never
+   gpg --armor --export-secret-keys "bitx-gps-station APT Repository" |
+       gh secret set APT_SIGNING_KEY -R jchonig/bitx-gps-station
    ```
 
-2. Store the armored private key as the repository secret
-   `APT_SIGNING_KEY` (Settings → Secrets and variables → Actions).
-3. Under Settings → Pages, set Source to **GitHub Actions**.
-4. Under Settings → Environments → github-pages, allow tags matching
-   `v*` to deploy.
+2. Point `gps-station.n2vlv.net` at GitHub Pages with a DNS-only CNAME to
+   `jchonig.github.io` (not proxied, or GitHub can't issue its
+   certificate).
+3. Turn on Pages, deployed by GitHub Actions, with that domain, and let
+   `v*` tags deploy to the `github-pages` environment:
+
+   ```sh
+   r=repos/jchonig/bitx-gps-station
+   gh api -X POST $r/pages -f build_type=workflow
+   gh api -X PUT $r/pages -f build_type=workflow -f cname=gps-station.n2vlv.net
+   gh api -X POST $r/environments/github-pages/deployment-branch-policies \
+       -f name='v*' -f type=tag
+   ```
+
+   Once GitHub has issued the certificate, turn on Enforce HTTPS under
+   Settings → Pages.
 
 ## License
 

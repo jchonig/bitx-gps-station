@@ -19,9 +19,9 @@ The package is architecture `all`: the same `.deb` installs on 32-bit
 
 ```sh
 sudo curl -fsSL -o /usr/share/keyrings/gps-station.gpg \
-    https://jchonig.github.io/bitx-gps-station/gps-station.gpg
+    https://gps-station.n2vlv.net/gps-station.gpg
 echo "deb [signed-by=/usr/share/keyrings/gps-station.gpg] \
-https://jchonig.github.io/bitx-gps-station stable main" |
+https://gps-station.n2vlv.net stable main" |
     sudo tee /etc/apt/sources.list.d/gps-station.list
 sudo apt update
 sudo apt install gps-station
