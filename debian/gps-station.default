@@ -1,0 +1,10 @@
+# Options for gps-station, read by its systemd unit.
+# After editing: sudo systemctl restart gps-station
+#
+#   --chars 4             send a 4-character grid instead of 6
+#   --no-ntp              only set the grid; leave ntpsec alone
+#   --no-grid             only look after ntpsec
+#   --radio HOST:PORT     radio program's TCP port (default 127.0.0.1:8081)
+#   --gpsd HOST:PORT      gpsd (default 127.0.0.1:2947)
+#   --dry-run             change nothing, log what it would do
+GPS_STATION_ARGS=""

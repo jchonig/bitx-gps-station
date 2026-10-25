@@ -1,0 +1,15 @@
+[Unit]
+Description=GPS fix to ntpsec and the radio's grid square
+Documentation=https://github.com/jchonig/bitx-gps-station
+Wants=gpsd.service
+After=gpsd.service ntpsec.service
+
+[Service]
+Environment=GPS_STATION_ARGS=
+EnvironmentFile=-/etc/default/gps-station
+ExecStart=/usr/sbin/gps-station $GPS_STATION_ARGS
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

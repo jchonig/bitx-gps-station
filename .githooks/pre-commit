@@ -1,0 +1,3 @@
+#!/bin/sh
+# Lint before every commit. Enable with: make hooks
+exec make lint

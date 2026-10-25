@@ -1,0 +1,20 @@
+Source: gps-station
+Section: hamradio
+Priority: optional
+Maintainer: Jeffrey Honig <jch@honig.net>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.6.2
+Homepage: https://github.com/jchonig/bitx-gps-station
+Vcs-Git: https://github.com/jchonig/bitx-gps-station.git
+Vcs-Browser: https://github.com/jchonig/bitx-gps-station
+Rules-Requires-Root: no
+
+Package: gps-station
+Architecture: all
+Depends: ${misc:Depends}, python3 (>= 3.9), gpsd
+Recommends: ntpsec
+Description: GPS time for ntpsec and grid square for the sBitx/zBitx
+ Watches gpsd on an sBitx or zBitx transceiver. Once the GPS has a fix it
+ adds the GPS as a refclock to ntpsec, calibrates its NMEA delay against
+ network time when the network is up, and sets the radio's grid square
+ (Maidenhead locator) in the sbitx or zbitxre software over its TCP port.

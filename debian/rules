@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+
+# The top-level Makefile drives Docker; there is nothing to build or clean.
+override_dh_auto_build override_dh_auto_clean:
+
+# The tests run in CI and `make test`; the build needs nothing but debhelper.
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -D -m 755 src/gps_station.py debian/gps-station/usr/sbin/gps-station
+	sed -i '1s|^#!.*|#!/usr/bin/python3|' debian/gps-station/usr/sbin/gps-station
