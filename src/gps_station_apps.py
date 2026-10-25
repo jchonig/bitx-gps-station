@@ -33,6 +33,7 @@ Programs that can be read or changed while running:
 import errno
 import ipaddress
 import json
+import math
 import os
 import re
 import socket
@@ -581,6 +582,48 @@ class GpsGrid:
             return mode
         best = f" (best {g.best:.0f} dB-Hz)" if g.best else ""
         return f"{mode}: {g.used} used, {g.heard} heard of {g.seen} in view{best}"
+
+
+# ---------------------------------------------------------------- sky map
+
+# gpsd's gnssid numbers
+SYSTEMS = {0: "GPS", 1: "SBAS", 2: "Galileo", 3: "BeiDou", 4: "IMES", 5: "QZSS",
+           6: "GLONASS", 7: "NavIC"}
+
+
+def system_of(sat):
+    """The satellite system's name, from gnssid or (older gpsd) the PRN range."""
+    if sat.get("gnssid") in SYSTEMS:
+        return SYSTEMS[sat["gnssid"]]
+    prn = sat.get("PRN") or 0
+    if 1 <= prn <= 32:
+        return "GPS"
+    if 33 <= prn <= 64 or 120 <= prn <= 158:
+        return "SBAS"
+    if 65 <= prn <= 96:
+        return "GLONASS"
+    return "other"
+
+
+def sky_position(az, el, radius):
+    """(x, y) from the centre of a sky plot, north up and east right; the
+    horizon is at radius, straight up at the centre."""
+    r = radius * (90.0 - max(0.0, min(90.0, el))) / 90.0
+    a = math.radians(az)
+    return r * math.sin(a), -r * math.cos(a)
+
+
+def sky_plot(sats, radius):
+    """Split the satellites into those with a known direction, as
+    (x, y, sat), and the PRNs of those the receiver can't place yet."""
+    placed, unplaced = [], []
+    for s in sats:
+        el, az = s.get("el"), s.get("az")
+        if el is None or az is None or el < 0:
+            unplaced.append(s.get("PRN"))
+        else:
+            placed.append((*sky_position(az, el, radius), s))
+    return placed, unplaced
 
 
 # ---------------------------------------------------------------- tracking

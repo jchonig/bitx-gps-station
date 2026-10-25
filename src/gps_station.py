@@ -85,6 +85,9 @@ class Gpsd:
     3 = 3D); satellites in view, heard (any signal) and used; and the best
     signal in dB-Hz. Each is None until gpsd says.
 
+    sats is the latest satellite list from SKY: dicts with PRN, gnssid,
+    az, el, ss and used, as gpsd sends them.
+
     shm_unit is the NTP shared-memory unit gpsd writes time to, from its
     TOFF messages: -1 means gpsd has none (it wasn't started with -n)."""
 
@@ -95,6 +98,7 @@ class Gpsd:
         self.next_try = 0.0
         self.mode = None
         self.seen = self.heard = self.used = self.best = None
+        self.sats = []
         self.shm_unit = None
 
     def _connect(self):
@@ -133,6 +137,7 @@ class Gpsd:
             self.sock.close()
             self.sock = None
             self.mode = self.seen = self.heard = self.used = self.best = None
+            self.sats = []
             self.shm_unit = None
             self.next_try = time.monotonic() + RADIO_RETRY_S
             return None
@@ -159,6 +164,7 @@ class Gpsd:
         sats = msg.get("satellites")
         if sats is None:
             return                        # a partial SKY: keep what we had
+        self.sats = sats
         self.seen = msg.get("nSat", len(sats))
         self.used = msg.get("uSat", sum(1 for s in sats if s.get("used")))
         signals = [s.get("ss") or 0 for s in sats]

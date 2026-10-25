@@ -58,7 +58,12 @@ the GPS grid, amber when one doesn't, grey with no fix. Clicking it opens
 a window, kept off the taskbar, showing the GPS grid, the receiver's
 state (no fix, 2D or 3D fix; satellites used, heard with any signal and
 in view; the strongest signal) and a row for each supported program that
-is running. The window stays above the radio's full-screen window:
+is running, with a map of the sky: each satellite at its direction and
+height (horizon outside, overhead in the middle, north up), coloured by
+system, filled when used in the fix, a ring when only heard, grey when
+not heard, bigger for a stronger signal. Satellites whose position the
+receiver doesn't know yet are listed beside it. The window stays above
+the radio's full-screen window:
 
 ```text
 GPS: FN31pr

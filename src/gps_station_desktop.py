@@ -108,8 +108,82 @@ class Worker(threading.Thread):
                 self.tracker.update(self.gps.grid, apps.running())
             state = {"grid": self.gps.grid, "candidate": self.gps.candidate,
                      "fix": self.gps.has_fix(), "receiver": self.gps.receiver(),
-                     "rows": self.tracker.snapshot()}
+                     "sats": list(self.gps.gpsd.sats), "rows": self.tracker.snapshot()}
             GLib.idle_add(self.on_update, state)
+
+
+# satellite system -> colour (r, g, b)
+SYSTEM_COLOURS = {
+    "GPS": (0.20, 0.45, 0.85),
+    "GLONASS": (0.90, 0.50, 0.10),
+    "Galileo": (0.20, 0.65, 0.30),
+    "BeiDou": (0.80, 0.20, 0.20),
+    "QZSS": (0.55, 0.30, 0.75),
+    "SBAS": (0.10, 0.60, 0.60),
+}
+
+
+class SkyMap(Gtk.DrawingArea):
+    """A polar plot of the sky: horizon outside, straight up in the middle,
+    north at the top. Filled dots are used in the fix, rings are heard,
+    grey dots aren't heard; bigger means a stronger signal."""
+
+    SIZE = 220
+
+    def __init__(self):
+        super().__init__()
+        self.set_size_request(self.SIZE, self.SIZE)
+        self.sats = []
+        self.connect("draw", self.draw)
+
+    def update(self, sats):
+        self.sats = sats
+        self.queue_draw()
+
+    def draw(self, widget, cr):
+        w, h = widget.get_allocated_width(), widget.get_allocated_height()
+        cx, cy = w / 2, h / 2
+        radius = min(w, h) / 2 - 14
+        cr.set_line_width(1)
+        cr.set_source_rgb(0.97, 0.97, 0.95)
+        cr.arc(cx, cy, radius, 0, 6.2832)
+        cr.fill()
+        cr.set_source_rgb(0.65, 0.65, 0.65)
+        for el in (0, 30, 60):
+            cr.new_path()
+            cr.arc(cx, cy, radius * (90 - el) / 90, 0, 6.2832)
+            cr.stroke()
+        cr.move_to(cx - radius, cy)
+        cr.line_to(cx + radius, cy)
+        cr.move_to(cx, cy - radius)
+        cr.line_to(cx, cy + radius)
+        cr.stroke()
+        cr.set_font_size(10)
+        for text, x, y in (("N", cx - 3, cy - radius - 3), ("S", cx - 3, cy + radius + 11),
+                           ("E", cx + radius + 3, cy + 4), ("W", cx - radius - 12, cy + 4)):
+            cr.move_to(x, y)
+            cr.show_text(text)
+        placed, _ = apps.sky_plot(self.sats, radius)
+        for x, y, s in placed:
+            ss = s.get("ss") or 0
+            dot = 3 + min(ss, 50) / 10
+            r, g, b = SYSTEM_COLOURS.get(apps.system_of(s), (0.3, 0.3, 0.3))
+            if ss <= 0:
+                r, g, b = 0.7, 0.7, 0.7
+            cr.set_source_rgb(r, g, b)
+            cr.new_path()                 # don't join this dot to the last label
+            cr.arc(cx + x, cy + y, dot, 0, 6.2832)
+            if s.get("used"):
+                cr.fill()
+            else:
+                cr.set_line_width(2)
+                cr.stroke()
+                cr.set_line_width(1)
+            cr.set_source_rgb(0.2, 0.2, 0.2)
+            cr.set_font_size(9)
+            cr.move_to(cx + x + dot + 1, cy + y + 3)
+            cr.show_text(str(s.get("PRN", "")))
+        return False
 
 
 class Window(Gtk.Window):
@@ -129,6 +203,14 @@ class Window(Gtk.Window):
         box.pack_start(self.gps_label, False, False, 0)
         self.receiver_label = Gtk.Label(xalign=0)
         box.pack_start(self.receiver_label, False, False, 0)
+        sky = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
+        self.sky = SkyMap()
+        sky.pack_start(self.sky, False, False, 0)
+        self.sky_legend = Gtk.Label(xalign=0, yalign=0)
+        self.sky_legend.set_line_wrap(True)
+        self.sky_legend.set_max_width_chars(28)
+        sky.pack_start(self.sky_legend, True, True, 0)
+        box.pack_start(sky, False, False, 0)
         self.grid = Gtk.Grid(column_spacing=12, row_spacing=8)
         box.pack_start(self.grid, True, True, 0)
         self.empty = Gtk.Label(label="No supported programs are running.", xalign=0)
@@ -138,7 +220,10 @@ class Window(Gtk.Window):
         self.widgets = {}
 
     def refresh(self, state):
-        if state["grid"] is None:
+        if state["grid"] is None and state["fix"] and state["candidate"]:
+            self.gps_label.set_markup(
+                f"<b>GPS:</b> {state['candidate']}  (settling: held for a minute before use)")
+        elif state["grid"] is None:
             self.gps_label.set_markup("<b>GPS:</b> no fix yet")
         else:
             extra = "" if state["fix"] else "  (fix lost; last grid)"
@@ -147,6 +232,8 @@ class Window(Gtk.Window):
             self.gps_label.set_markup(f"<b>GPS:</b> {state['grid']}{extra}")
         self.receiver_label.set_markup(
             f"<small>{GLib.markup_escape_text(state['receiver'])}</small>")
+        self.sky.update(state["sats"])
+        self.sky_legend.set_markup(sky_legend(state["sats"]))
         for row in state["rows"]:
             if not row["running"] and row["key"] not in self.widgets:
                 continue
@@ -192,6 +279,22 @@ class Window(Gtk.Window):
         w["check"].set_visible(row["tickable"])
         tip = None if row["writable"] else (row["why"] or "can't be changed while running")
         w["button"].set_tooltip_text(tip)
+
+
+def sky_legend(sats):
+    """Markup beside the sky map: the key, and satellites with no position yet."""
+    lines = ["<small>● used in the fix\n○ heard\n<span foreground='#999'>●</span> not heard"
+             "\nbigger = stronger signal"]
+    systems = sorted({apps.system_of(s) for s in sats})
+    for name in systems:
+        r, g, b = SYSTEM_COLOURS.get(name, (0.3, 0.3, 0.3))
+        colour = f"#{int(r * 255):02x}{int(g * 255):02x}{int(b * 255):02x}"
+        lines.append(f"<span foreground='{colour}'>●</span> {name}")
+    _, unplaced = apps.sky_plot(sats, 1)
+    if unplaced:
+        prns = ", ".join(str(p) for p in unplaced)
+        lines.append(f"\nNo position yet: {GLib.markup_escape_text(prns)}")
+    return "\n".join(lines) + "</small>"
 
 
 def overall(state):

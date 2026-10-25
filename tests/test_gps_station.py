@@ -196,6 +196,7 @@ def test_gpsd_poll_returns_last_fix():
         srv.close()
     assert fix == (41.714775, -72.72726)
     assert (g.mode, g.seen, g.heard, g.used, g.best) == (2, 3, 2, 1, 31.0)
+    assert [s["ss"] for s in g.sats] == [31.0, 22.0, 0.0]
 
 
 def test_gpsd_toff_unit():

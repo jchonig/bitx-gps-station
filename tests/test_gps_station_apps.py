@@ -96,6 +96,33 @@ def test_receiver_text():
     assert g.receiver() == "3D fix: 7 used, 8 heard of 9 in view (best 41 dB-Hz)"
 
 
+# ---------------------------------------------------------------- sky map
+
+
+def test_sky_position():
+    assert ga.sky_position(0, 90, 100) == pytest.approx((0, 0))            # overhead
+    assert ga.sky_position(0, 0, 100) == pytest.approx((0, -100))          # north horizon
+    assert ga.sky_position(90, 0, 100) == pytest.approx((100, 0))          # east
+    assert ga.sky_position(180, 45, 100) == pytest.approx((0, 50))         # south, half up
+    assert ga.sky_position(270, -5, 100) == pytest.approx((-100, 0))       # clamped
+
+
+def test_sky_plot():
+    sats = [{"PRN": 10, "az": 90.0, "el": 0.0}, {"PRN": 2, "az": 0.0, "el": None},
+            {"PRN": 4}, {"PRN": 5, "az": 10.0, "el": -3.0}]
+    placed, unplaced = ga.sky_plot(sats, 100)
+    assert [(round(x), round(y), s["PRN"]) for x, y, s in placed] == [(100, 0, 10)]
+    assert unplaced == [2, 4, 5]
+
+
+def test_system_of():
+    assert ga.system_of({"gnssid": 6, "PRN": 70}) == "GLONASS"
+    assert ga.system_of({"PRN": 12}) == "GPS"
+    assert ga.system_of({"PRN": 133}) == "SBAS"
+    assert ga.system_of({"PRN": 70}) == "GLONASS"
+    assert ga.system_of({"PRN": 300}) == "other"
+
+
 # ---------------------------------------------------------------- WSJT-X protocol
 
 
