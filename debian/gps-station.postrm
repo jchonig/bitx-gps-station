@@ -1,0 +1,32 @@
+#!/bin/sh
+# Take the GPS refclock back out of ntpsec: our file in conf.d, and, if no
+# other *.conf is left there, the include line gps-station added to
+# ntp.conf and the directory itself.
+set -e
+
+case "$1" in
+remove|purge)
+    conf=/etc/ntpsec/ntp.conf
+    dir=/etc/ntpsec/conf.d
+    changed=
+    if [ -f "$dir/gps-station.conf" ]; then
+        rm -f "$dir/gps-station.conf"
+        changed=yes
+    fi
+    others=$(find "$dir" -maxdepth 1 -name '*.conf' 2>/dev/null | head -1)
+    if [ -z "$others" ] && [ -f "$conf" ] \
+            && grep -q "^includefile $dir/\$" "$conf"; then
+        sed -i -e "\\#^\\# Added by gps-station: also read every \\*\\.conf in $dir\$#d" \
+            -e "\\#^includefile $dir/\$#d" "$conf"
+        rmdir "$dir" 2>/dev/null || true
+        changed=yes
+    fi
+    if [ -n "$changed" ] && [ -d /run/systemd/system ]; then
+        deb-systemd-invoke try-restart ntpsec.service || true
+    fi
+    ;;
+esac
+
+#DEBHELPER#
+
+exit 0

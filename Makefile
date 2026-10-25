@@ -21,7 +21,7 @@ lint-python: image
 	$(RUN) ruff check src tests
 
 lint-shell: image
-	$(RUN) shellcheck .githooks/pre-commit scripts/*.sh
+	$(RUN) shellcheck .githooks/pre-commit scripts/*.sh debian/*.postrm
 
 lint-markdown:
 	$(DOCKER) $(MDLINT) "**/*.md" "#.pytest_cache"

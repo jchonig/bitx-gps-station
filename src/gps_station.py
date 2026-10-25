@@ -4,12 +4,14 @@
 Runs beside gpsd on an sBitx or zBitx and does two jobs:
 
 TIME. When gpsd starts writing time to shared memory (that is, the receiver
-has a fix), it adds a refclock to /etc/ntpsec/ntp.conf and restarts ntpsec.
-Later, whenever ntpd is synced to a network server and has heard the GPS
-for a while, it measures how late the GPS's NMEA time arrives, sets that as
-time1, restarts ntpsec once more, and leaves it alone from then on. With
-the network up, the internet servers outvote an uncalibrated GPS; in the
-field, the GPS is what keeps the clock.
+has a fix), it writes the GPS refclock to /etc/ntpsec/conf.d/gps-station.conf,
+adds "includefile /etc/ntpsec/conf.d/" (every *.conf there) to the end of
+/etc/ntpsec/ntp.conf (once), and restarts ntpsec. Later, whenever ntpd is
+synced to a network server and has heard the GPS for a while, it measures
+how late the GPS's NMEA time arrives, sets that as time1, restarts ntpsec
+once more, and leaves it alone from then on. With the network up, the
+internet servers outvote an uncalibrated GPS; in the field, the GPS is
+what keeps the clock, which is why the file also sets "tos minsane 1".
 
 GRID. It works out the Maidenhead locator from the fix and sets it on the
 radio over TCP port 8081, retrying until the radio program answers and the
@@ -44,6 +46,8 @@ import time
 GPSD = ("127.0.0.1", 2947)
 RADIO = ("127.0.0.1", 8081)
 NTP_CONF = "/etc/ntpsec/ntp.conf"
+NTP_CONF_DIR = "/etc/ntpsec/conf.d"     # included from ntp.conf: every *.conf in it
+NTP_FILE = "gps-station.conf"           # ours, in NTP_CONF_DIR
 NTP_SERVICE = "ntpsec"
 
 GRID_STEADY_S = 60        # a new grid must hold this long before it is sent
@@ -269,8 +273,53 @@ class ShmWatch:
 
 # ---------------------------------------------------------------- ntpsec
 
-def read_block(conf_text):
-    """Our block's (unit, time1, calibrated), or None if it isn't there."""
+def read_include(text):
+    """Our include file's (unit, time1, calibrated), or None if it has no refclock."""
+    m = re.search(r"calibrated=(\w+).*?^refclock shm unit (\d+) refid GPS time1 (-?[\d.]+)",
+                  text, re.S | re.M)
+    if not m:
+        return None
+    return int(m.group(2)), float(m.group(3)), m.group(1) == "yes"
+
+
+def include_text(unit, time1, calibrated):
+    return (f"# Written by gps-station; changes are overwritten. "
+            f"calibrated={'yes' if calibrated else 'no'}\n"
+            "# Let the GPS alone set the clock when no network server is reachable\n"
+            "# (Debian's ntp.conf asks for 3 agreeing sources).\n"
+            "tos minsane 1\n"
+            f"refclock shm unit {unit} refid GPS time1 {time1:.4f}\n")
+
+
+def include_line(conf_dir):
+    return f"includefile {conf_dir.rstrip('/')}/"
+
+
+def has_include(conf_text, conf_dir):
+    d = re.escape(conf_dir.rstrip("/"))
+    return re.search(r"^\s*includefile\s+" + d + r"/?\s*$", conf_text, re.M) is not None
+
+
+def add_include(conf_text, conf_dir):
+    """ntp.conf with a line including every *.conf in conf_dir, at the end
+    (so a tos there wins), and without the block older versions wrote into
+    ntp.conf itself."""
+    text = strip_old_block(conf_text)
+    if has_include(text, conf_dir):
+        return text
+    if not text.endswith("\n"):
+        text += "\n"
+    return (text + f"# Added by gps-station: also read every *.conf in {conf_dir}\n"
+            + include_line(conf_dir) + "\n")
+
+
+# Older versions kept the refclock in a block in ntp.conf itself.
+BEGIN = "# gps_station: begin"
+END = "# gps_station: end"
+
+
+def read_old_block(conf_text):
+    """The old block's (unit, time1, calibrated), or None if it isn't there."""
     m = re.search(re.escape(BEGIN) + r".*?calibrated=(\w+).*?\n"
                   r"refclock shm unit (\d+) refid GPS time1 (-?[\d.]+)",
                   conf_text, re.S)
@@ -279,22 +328,24 @@ def read_block(conf_text):
     return int(m.group(2)), float(m.group(3)), m.group(1) == "yes"
 
 
+def strip_old_block(conf_text):
+    return re.sub(re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n?", "",
+                  conf_text, flags=re.S)
+
+
 def foreign_shm(conf_text):
-    """A refclock shm line somebody else put there."""
-    outside = re.sub(re.escape(BEGIN) + r".*?" + re.escape(END), "", conf_text, flags=re.S)
-    return re.search(r"^\s*refclock\s+shm\b", outside, re.M) is not None
+    """A refclock shm line (in ntp.conf or another included file) that we didn't write."""
+    return re.search(r"^\s*refclock\s+shm\b", strip_old_block(conf_text), re.M) is not None
 
 
-def write_block(conf_text, unit, time1, calibrated):
-    block = (f"{BEGIN} (managed by gps_station.py; calibrated="
-             f"{'yes' if calibrated else 'no'})\n"
-             f"refclock shm unit {unit} refid GPS time1 {time1:.4f}\n"
-             f"{END}\n")
-    stripped = re.sub(re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n?", "",
-                      conf_text, flags=re.S)
-    if not stripped.endswith("\n"):
-        stripped += "\n"
-    return stripped + block
+def other_conf_files(conf_dir, ours):
+    """The *.conf files in conf_dir besides ours: they are read by ntpd too."""
+    try:
+        names = sorted(os.listdir(conf_dir))
+    except OSError:
+        return []
+    return [os.path.join(conf_dir, n) for n in names
+            if n.endswith(".conf") and os.path.join(conf_dir, n) != ours]
 
 
 def parse_ntpq(text):
@@ -318,8 +369,13 @@ def is_shm(remote):
 
 
 class Ntp:
-    def __init__(self, conf, service, dry_run):
+    """Keeps the GPS refclock in conf.d/gps-station.conf; ntp.conf gets one
+    line including the conf.d directory."""
+
+    def __init__(self, conf, service, dry_run, conf_dir=NTP_CONF_DIR):
         self.conf = conf
+        self.conf_dir = conf_dir
+        self.include = os.path.join(conf_dir, NTP_FILE)
         self.service = service
         self.dry_run = dry_run
         self.shm = ShmWatch()
@@ -328,28 +384,48 @@ class Ntp:
         self.samples = []
         self.gave_up = False
         self.warned_no_shm = False
-        self.virtual = None       # the config as a dry run would have left it
+        self.virtual = {}         # path -> text, as a dry run would have left it
 
-    def _read(self):
-        if self.virtual is not None:
-            return self.virtual
-        with open(self.conf) as f:
-            return f.read()
+    def _read(self, path):
+        if path in self.virtual:
+            return self.virtual[path]
+        try:
+            with open(path) as f:
+                return f.read()
+        except FileNotFoundError:
+            if path == self.include:
+                return ""
+            raise
 
-    def _write(self, text, why):
+    def _write(self, path, text):
         if self.dry_run:
-            self.virtual = text
-            log(f"ntp: would write {self.conf} ({why}) and restart {self.service}; "
-                f"its block would be:\n{text[text.find(BEGIN):]}")
+            self.virtual[path] = text
+            log(f"ntp: would write {path}:\n{text}")
             return
-        tmp = self.conf + ".gps_station.tmp"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + ".gps_station.tmp"
         with open(tmp, "w") as f:
             f.write(text)
-        st = os.stat(self.conf)
-        os.chmod(tmp, st.st_mode)
-        os.rename(tmp, self.conf)
+        try:
+            os.chmod(tmp, os.stat(path).st_mode)
+        except FileNotFoundError:
+            os.chmod(tmp, 0o644)
+        os.rename(tmp, path)
+
+    def _restart(self, why):
+        if self.dry_run:
+            log(f"ntp: {why}; would restart {self.service}")
+            return
         log(f"ntp: {why}; restarting {self.service}")
         subprocess.run(["systemctl", "restart", self.service], check=False)
+
+    def _save(self, conf, unit, time1, calibrated, why):
+        """Write our file, make sure ntp.conf includes it, restart ntpsec."""
+        self._write(self.include, include_text(unit, time1, calibrated))
+        wanted = add_include(conf, self.conf_dir)
+        if wanted != conf:
+            self._write(self.conf, wanted)
+        self._restart(why)
 
     def tick(self, shm_unit=None):
         """shm_unit: the unit gpsd says it writes time to (Gpsd.shm_unit)."""
@@ -363,25 +439,34 @@ class Ntp:
             self.warned_no_shm = False
         now = time.monotonic()
         try:
-            text = self._read()
+            conf = self._read(self.conf)
+            ours = read_include(self._read(self.include))
+            others = {p: self._read(p) for p in other_conf_files(self.conf_dir, self.include)}
         except OSError as e:
-            log(f"ntp: can't read {self.conf}: {e}; leaving ntpsec alone")
+            log(f"ntp: can't read ntpsec's config: {e}; leaving ntpsec alone")
             self.gave_up = True
             return
-        if foreign_shm(text):
-            log("ntp: ntp.conf already has a refclock shm line I didn't write; "
-                "leaving ntpsec alone")
-            self.gave_up = True
+        for path, text in [(self.conf, conf), *others.items()]:
+            if foreign_shm(text):
+                log(f"ntp: {path} already has a refclock shm line I didn't write; "
+                    "leaving ntpsec alone")
+                self.gave_up = True
+                return
+        old = read_old_block(conf)
+        if old and not ours:
+            self._save(conf, *old, f"moved the GPS refclock from {self.conf} to {self.include}")
             return
-        ours = read_block(text)
+        if ours and not has_include(conf, self.conf_dir):
+            self._save(conf, *ours, f"{self.conf} had lost its includefile line")
+            return
 
         if now >= self.next_shm:
             self.next_shm = now + SHM_CHECK_S
             unit = self.shm.active_unit()
             if unit is not None and (ours is None or ours[0] != unit):
                 time1 = ours[1] if ours else 0.0
-                self._write(write_block(text, unit, time1, False),
-                            f"GPS has a fix, adding refclock shm unit {unit}")
+                self._save(conf, unit, time1, False,
+                           f"GPS has a fix, adding refclock shm unit {unit}")
                 self.samples = []
                 self.next_cal = now + 15 * 60     # let ntpd settle first
                 return
@@ -410,9 +495,9 @@ class Ntp:
             new = time1
         else:
             new = time1 - offset / 1000.0     # GPS reads late -> negative offset -> add delay
-        self._write(write_block(text, unit, new, True),
-                    f"GPS offset {offset:+.1f} ms against the network; "
-                    f"time1 {time1:.4f} -> {new:.4f}")
+        self._save(conf, unit, new, True,
+                   f"GPS offset {offset:+.1f} ms against the network; "
+                   f"time1 {time1:.4f} -> {new:.4f}")
 
 
 # ---------------------------------------------------------------- main
@@ -427,7 +512,10 @@ def main():
     ap.add_argument("--radio", default="127.0.0.1:8081", help="host:port of the radio")
     ap.add_argument("--gpsd", default="127.0.0.1:2947", help="host:port of gpsd")
     ap.add_argument("--chars", type=int, choices=(4, 6), default=6, help="grid length")
-    ap.add_argument("--conf", default=NTP_CONF)
+    ap.add_argument("--conf", default=NTP_CONF, help="ntpsec's main config")
+    ap.add_argument("--conf-dir", default=NTP_CONF_DIR,
+                    help="directory included from --conf; the refclock goes in "
+                         f"{NTP_FILE} there")
     ap.add_argument("--service", default=NTP_SERVICE)
     ap.add_argument("--no-ntp", action="store_true", help="only set the grid")
     ap.add_argument("--no-grid", action="store_true", help="only look after ntpsec")
@@ -441,7 +529,7 @@ def main():
         if os.geteuid() != 0 and not a.dry_run:
             log("ntp: not root, so ntpsec is left alone (use sudo, or --no-ntp to hush this)")
         else:
-            ntp = Ntp(a.conf, a.service, a.dry_run)
+            ntp = Ntp(a.conf, a.service, a.dry_run, conf_dir=a.conf_dir)
 
     candidate, since = None, 0.0
     sent, pending, next_try = None, None, 0.0

@@ -16,16 +16,25 @@ It has two parts, in one package:
 `gps-station` runs as a systemd service beside `gpsd` and does two jobs.
 
 **Time.** As soon as gpsd starts writing time to shared memory (the
-receiver has a fix), it adds a `refclock shm` line to
-`/etc/ntpsec/ntp.conf` and restarts ntpsec. Later, when ntpd is synced to
-a network server and has heard the GPS steadily, it measures how late the
-GPS's NMEA time arrives over ten polls, sets that as `time1`, restarts
-ntpsec once more, and leaves it alone from then on. With the network up,
-internet servers outvote the GPS; in the field, the GPS keeps the clock.
+receiver has a fix), it writes a `refclock shm` line to its own file,
+`/etc/ntpsec/conf.d/gps-station.conf`, and restarts ntpsec. Later, when ntpd is
+synced to a network server and has heard the GPS steadily, it measures
+how late the GPS's NMEA time arrives over ten polls, sets that as
+`time1`, restarts ntpsec once more, and leaves it alone from then on.
+With the network up, internet servers outvote the GPS; in the field, the
+GPS keeps the clock.
 
-Its lines in `ntp.conf` sit between `# gps_station: begin` and
-`# gps_station: end` markers. If `ntp.conf` already has a `refclock shm`
-line that it did not write, it leaves ntpsec alone.
+`ntp.conf` itself is changed once: a line at its end,
+`includefile /etc/ntpsec/conf.d/`, makes ntpsec read every `*.conf` file
+in that directory, so other local settings can go there too. The file
+also sets `tos minsane 1`. Debian's `ntp.conf` asks for three agreeing
+sources before setting the clock, which a lone GPS in the field can never
+be; with the network up there are plenty of servers either way. If
+`ntp.conf` or another file in `conf.d` already has a `refclock shm` line,
+it leaves ntpsec alone. Removing the package deletes its file, and the
+include line too when no other `*.conf` is left in `conf.d`.
+Development builds kept the refclock in a marked block inside `ntp.conf`;
+that block is moved into the file.
 
 **Grid.** It works out the 6-character (or, with `--chars 4`,
 4-character) Maidenhead locator from the fix and sets it on the radio over
@@ -196,6 +205,7 @@ the service after changing it.
 | `--radio HOST:PORT` | radio software's port (`127.0.0.1:8081`)      |
 | `--gpsd HOST:PORT`  | gpsd's port (`127.0.0.1:2947`)                |
 | `--conf PATH`       | ntpsec config (`/etc/ntpsec/ntp.conf`)        |
+| `--conf-dir PATH`   | included directory (`/etc/ntpsec/conf.d`)      |
 | `--service NAME`    | ntpsec's systemd unit (`ntpsec`)              |
 | `--dry-run`         | change nothing; log what it would do          |
 

@@ -248,31 +248,43 @@ def test_gpsd_sky_from_satellite_list():
 # ---------------------------------------------------------------- ntp.conf
 
 BASE_CONF = "driftfile /var/lib/ntpsec/ntp.drift\npool 2.debian.pool.ntp.org iburst\n"
+CONF_D = "/etc/ntpsec/conf.d"
+OLD_BLOCK = ("# gps_station: begin (managed by gps_station.py; calibrated=yes)\n"
+             "refclock shm unit 2 refid GPS time1 0.0620\n"
+             "# gps_station: end\n")
 
 
-def test_write_and_read_block():
-    text = gs.write_block(BASE_CONF, 2, -0.125, False)
+def test_include_text_roundtrip():
+    text = gs.include_text(2, -0.125, False)
+    assert gs.read_include(text) == (2, -0.125, False)
+    assert "tos minsane 1" in text
+    assert gs.read_include(gs.include_text(0, 0.062, True)) == (0, 0.062, True)
+    assert gs.read_include("") is None
+
+
+def test_add_include():
+    text = gs.add_include(BASE_CONF, CONF_D)
     assert text.startswith(BASE_CONF)
-    assert gs.read_block(text) == (2, -0.125, False)
-    assert not gs.foreign_shm(text)
-
-    again = gs.write_block(text, 0, 0.5, True)
-    assert again.count(gs.BEGIN) == 1
-    assert gs.read_block(again) == (0, 0.5, True)
-
-
-def test_write_block_adds_newline():
-    text = gs.write_block("pool x iburst", 0, 0.0, False)
-    assert text.startswith("pool x iburst\n" + gs.BEGIN)
+    assert text.endswith("includefile /etc/ntpsec/conf.d/\n")
+    assert gs.has_include(text, CONF_D)
+    assert gs.add_include(text, CONF_D) == text        # only once
+    assert gs.add_include("pool x iburst", CONF_D).startswith("pool x iburst\n# Added")
+    # somebody else's include of the same directory counts
+    assert gs.has_include("includefile /etc/ntpsec/conf.d\n", CONF_D)
+    assert not gs.has_include("includefile /etc/ntpsec/conf.d/x.conf\n", CONF_D)
 
 
-def test_read_block_absent():
-    assert gs.read_block(BASE_CONF) is None
+def test_add_include_drops_old_block():
+    text = gs.add_include(BASE_CONF + OLD_BLOCK, CONF_D)
+    assert gs.BEGIN not in text and "refclock shm" not in text
+    assert gs.read_old_block(BASE_CONF + OLD_BLOCK) == (2, 0.062, True)
+    assert gs.read_old_block(BASE_CONF) is None
 
 
 def test_foreign_shm():
     assert gs.foreign_shm(BASE_CONF + "refclock shm unit 0 refid GPS\n")
     assert not gs.foreign_shm(BASE_CONF + "# refclock shm unit 0\n")
+    assert not gs.foreign_shm(BASE_CONF + OLD_BLOCK)   # our old block isn't foreign
 
 
 NTPQ = """\
@@ -331,9 +343,13 @@ def ntp(tmp_path, monkeypatch):
     conf.write_text(BASE_CONF)
     clock = Clock()
     monkeypatch.setattr(gs.time, "monotonic", clock)
-    n = gs.Ntp(str(conf), "ntpsec", dry_run=True)
+    n = gs.Ntp(str(conf), "ntpsec", dry_run=True, conf_dir=str(tmp_path / "conf.d"))
     n.clock = clock
     return n
+
+
+def state(n):
+    return gs.read_include(n.virtual.get(n.include, ""))
 
 
 def test_tick_adds_refclock_then_calibrates(ntp, monkeypatch):
@@ -343,23 +359,26 @@ def test_tick_adds_refclock_then_calibrates(ntp, monkeypatch):
         a, 0, stdout=NTPQ))
 
     ntp.tick()
-    assert ntp.virtual is None              # no fix yet, nothing written
+    assert ntp.virtual == {}                # no fix yet, nothing written
 
     unit[0] = 0
     ntp.clock.now += gs.SHM_CHECK_S
     ntp.tick()
-    assert gs.read_block(ntp.virtual) == (0, 0.0, False)
+    assert state(ntp) == (0, 0.0, False)
+    assert gs.has_include(ntp.virtual[ntp.conf], ntp.conf_dir)
+    conf_after_first = ntp.virtual[ntp.conf]
 
     # calibration waits 15 minutes, then takes CAL_SAMPLES samples
     for _ in range(gs.CAL_SAMPLES):
         ntp.clock.now += 15 * 60
         ntp.tick()
-    unit_, time1, calibrated = gs.read_block(ntp.virtual)
+    unit_, time1, calibrated = state(ntp)
     assert (unit_, calibrated) == (0, True)
     assert time1 == pytest.approx(0.112345, abs=1e-4)
+    assert ntp.virtual[ntp.conf] == conf_after_first    # ntp.conf not touched again
 
     # calibrated: left alone from then on
-    before = ntp.virtual
+    before = dict(ntp.virtual)
     ntp.clock.now += 15 * 60
     ntp.tick()
     assert ntp.virtual == before
@@ -374,7 +393,26 @@ def test_tick_no_calibration_without_network(ntp, monkeypatch):
     for _ in range(gs.CAL_SAMPLES * 2):
         ntp.clock.now += 15 * 60
         ntp.tick()
-    assert gs.read_block(ntp.virtual) == (0, 0.0, False)
+    assert state(ntp) == (0, 0.0, False)
+
+
+def test_tick_moves_old_block(ntp, monkeypatch, tmp_path, capsys):
+    (tmp_path / "ntp.conf").write_text(BASE_CONF + OLD_BLOCK)
+    monkeypatch.setattr(ntp.shm, "active_unit", lambda: None)
+    ntp.tick()
+    assert state(ntp) == (2, 0.062, True)
+    conf = ntp.virtual[ntp.conf]
+    assert gs.BEGIN not in conf and gs.has_include(conf, ntp.conf_dir)
+    assert "moved the GPS refclock" in capsys.readouterr().out
+
+
+def test_tick_restores_lost_include(ntp, monkeypatch, tmp_path):
+    (tmp_path / "conf.d").mkdir()
+    (tmp_path / "conf.d" / "gps-station.conf").write_text(gs.include_text(0, 0.05, True))
+    monkeypatch.setattr(ntp.shm, "active_unit", lambda: None)
+    ntp.tick()
+    assert gs.has_include(ntp.virtual[ntp.conf], ntp.conf_dir)
+    assert state(ntp) == (0, 0.05, True)
 
 
 def test_tick_leaves_foreign_refclock_alone(ntp, monkeypatch, tmp_path):
@@ -382,23 +420,37 @@ def test_tick_leaves_foreign_refclock_alone(ntp, monkeypatch, tmp_path):
     monkeypatch.setattr(ntp.shm, "active_unit", lambda: 0)
     ntp.tick()
     assert ntp.gave_up
-    assert ntp.virtual is None
+    assert ntp.virtual == {}
+
+
+def test_tick_leaves_refclock_in_other_conf_d_file_alone(ntp, monkeypatch, tmp_path):
+    (tmp_path / "conf.d").mkdir()
+    (tmp_path / "conf.d" / "pps.conf").write_text("refclock shm unit 1 refid PPS\n")
+    (tmp_path / "conf.d" / "notes.txt").write_text("refclock shm unit 2\n")  # not *.conf
+    monkeypatch.setattr(ntp.shm, "active_unit", lambda: 0)
+    ntp.tick()
+    assert ntp.gave_up and ntp.virtual == {}
 
 
 def test_tick_missing_conf(tmp_path):
-    n = gs.Ntp(str(tmp_path / "missing.conf"), "ntpsec", dry_run=True)
+    n = gs.Ntp(str(tmp_path / "missing.conf"), "ntpsec", dry_run=True,
+               conf_dir=str(tmp_path / "conf.d"))
     n.tick()
     assert n.gave_up
 
 
-def test_write_for_real(tmp_path, monkeypatch):
+def test_save_for_real(tmp_path, monkeypatch):
     conf = tmp_path / "ntp.conf"
     conf.write_text(BASE_CONF)
-    conf.chmod(0o644)
+    conf.chmod(0o640)
+    conf_d = tmp_path / "conf.d"                          # doesn't exist yet
+    inc = conf_d / "gps-station.conf"
     calls = []
     monkeypatch.setattr(gs.subprocess, "run", lambda args, **k: calls.append(args))
-    n = gs.Ntp(str(conf), "ntpsec", dry_run=False)
-    n._write(gs.write_block(BASE_CONF, 2, 0.0, False), "test")
-    assert gs.read_block(conf.read_text()) == (2, 0.0, False)
-    assert conf.stat().st_mode & 0o777 == 0o644
+    n = gs.Ntp(str(conf), "ntpsec", dry_run=False, conf_dir=str(conf_d))
+    n._save(BASE_CONF, 2, 0.0, False, "test")
+    assert gs.read_include(inc.read_text()) == (2, 0.0, False)
+    assert inc.stat().st_mode & 0o777 == 0o644
+    assert gs.has_include(conf.read_text(), str(conf_d))
+    assert conf.stat().st_mode & 0o777 == 0o640           # keeps its mode
     assert calls == [["systemctl", "restart", "ntpsec"]]
