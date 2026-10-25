@@ -62,12 +62,16 @@ is running, with a map of the sky: each satellite at its direction and
 height (horizon outside, overhead in the middle, north up), coloured by
 system, filled when used in the fix, a ring when only heard, grey when
 not heard, bigger for a stronger signal. Satellites whose position the
-receiver doesn't know yet are listed beside it. The window stays above
+receiver doesn't know yet are listed beside it. A Time line says what
+the clock follows: locked to the GPS, synced over the Internet (with the
+GPS standing by), or not synchronized, and whether the GPS has been
+calibrated. The window stays above
 the radio's full-screen window:
 
 ```text
 GPS: FN31pr
 3D fix: 7 used, 9 heard of 11 in view (best 41 dB-Hz)
+Time: synced over the Internet to 192.0.2.10 (offset +0.4 ms); GPS standing by
 [x] Radio (zbitxre)  ✓ FN31pr                  [Update]
 [x] WSJT-X           ✗ AA11AA stale            [Update]
 [x] JS8Call          ✋ FN42aa set by hand     [Update]

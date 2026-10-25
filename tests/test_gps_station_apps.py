@@ -123,6 +123,48 @@ def test_system_of():
     assert ga.system_of({"PRN": 300}) == "other"
 
 
+# ---------------------------------------------------------------- time
+
+NTPQ_HEAD = ("     remote           refid      st t when poll reach   delay   offset   jitter\n"
+             "=" * 79 + "\n")
+GPS_ROW = " SHM(0)          .GPS.            0 l    3   64  377   0.0000 -61.500   2.1000\n"
+NET_ROW = " 192.0.2.10      .PPS.            1 u   33   64  377  12.3400   0.1230   0.4560\n"
+
+
+def mark(row, tally):
+    return tally + row[1:]
+
+
+def test_ntp_status_gps():
+    out = NTPQ_HEAD + mark(GPS_ROW, "*") + mark(NET_ROW, "+")
+    kind, text = ga.ntp_status(out, gs_include(True))
+    assert kind == "gps"
+    assert text == "locked to the GPS (offset -61.5 ms); GPS calibrated"
+
+
+def test_ntp_status_net_with_gps_standing_by():
+    out = NTPQ_HEAD + mark(GPS_ROW, "#") + mark(NET_ROW, "*")
+    kind, text = ga.ntp_status(out, gs_include(False))
+    assert kind == "net"
+    assert text == ("synced over the Internet to 192.0.2.10 (offset +0.1 ms); "
+                    "GPS standing by; GPS not calibrated yet")
+
+
+def test_ntp_status_net_without_gps():
+    kind, text = ga.ntp_status(NTPQ_HEAD + mark(NET_ROW, "*"))
+    assert kind == "net" and text.endswith("; the GPS isn't a time source yet")
+
+
+def test_ntp_status_none_and_down():
+    assert ga.ntp_status(NTPQ_HEAD + GPS_ROW + NET_ROW, gs_include(True)) == (
+        "none", "not synchronized; GPS calibrated")
+    assert ga.ntp_status(None) == ("down", "ntpsec isn't answering")
+
+
+def gs_include(calibrated):
+    return ga.gs.include_text(0, 0.06, calibrated)
+
+
 # ---------------------------------------------------------------- WSJT-X protocol
 
 

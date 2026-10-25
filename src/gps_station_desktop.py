@@ -108,7 +108,8 @@ class Worker(threading.Thread):
                 self.tracker.update(self.gps.grid, apps.running())
             state = {"grid": self.gps.grid, "candidate": self.gps.candidate,
                      "fix": self.gps.has_fix(), "receiver": self.gps.receiver(),
-                     "sats": list(self.gps.gpsd.sats), "rows": self.tracker.snapshot()}
+                     "sats": list(self.gps.gpsd.sats), "time": apps.read_ntp_status(),
+                     "rows": self.tracker.snapshot()}
             GLib.idle_add(self.on_update, state)
 
 
@@ -203,6 +204,9 @@ class Window(Gtk.Window):
         box.pack_start(self.gps_label, False, False, 0)
         self.receiver_label = Gtk.Label(xalign=0)
         box.pack_start(self.receiver_label, False, False, 0)
+        self.time_label = Gtk.Label(xalign=0)
+        self.time_label.set_line_wrap(True)
+        box.pack_start(self.time_label, False, False, 0)
         sky = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
         self.sky = SkyMap()
         sky.pack_start(self.sky, False, False, 0)
@@ -232,6 +236,10 @@ class Window(Gtk.Window):
             self.gps_label.set_markup(f"<b>GPS:</b> {state['grid']}{extra}")
         self.receiver_label.set_markup(
             f"<small>{GLib.markup_escape_text(state['receiver'])}</small>")
+        kind, text = state["time"]
+        colour = {"gps": "#2e8b3e", "net": "#2f6db5"}.get(kind, "#b06000")
+        self.time_label.set_markup(f"<b>Time:</b> <span foreground='{colour}'>"
+                                   f"{GLib.markup_escape_text(text)}</span>")
         self.sky.update(state["sats"])
         self.sky_legend.set_markup(sky_legend(state["sats"]))
         for row in state["rows"]:

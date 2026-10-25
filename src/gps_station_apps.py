@@ -38,6 +38,7 @@ import os
 import re
 import socket
 import struct
+import subprocess
 import time
 
 import gps_station as gs
@@ -624,6 +625,53 @@ def sky_plot(sats, radius):
         else:
             placed.append((*sky_position(az, el, radius), s))
     return placed, unplaced
+
+
+# ---------------------------------------------------------------- time
+
+NTP_GPS_FILE = os.path.join(gs.NTP_CONF_DIR, gs.NTP_FILE)
+
+
+def read_ntpq():
+    """`ntpq -pn` output, or None if ntpd doesn't answer."""
+    try:
+        r = subprocess.run(["ntpq", "-pn"], capture_output=True, text=True, timeout=5)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return r.stdout if r.returncode == 0 and r.stdout.strip() else None
+
+
+def ntp_status(ntpq_out, gps_file_text=""):
+    """(kind, text) for what the clock is following: kind is "gps", "net",
+    "none" or "down"; text says so, with the offset and the GPS's part."""
+    if ntpq_out is None:
+        return "down", "ntpsec isn't answering"
+    rows = gs.parse_ntpq(ntpq_out)
+    peer = next((r for r in rows if r[0] in "*o"), None)
+    gps = next((r for r in rows if gs.is_shm(r[1])), None)
+    ours = gs.read_include(gps_file_text or "")
+    calibration = "" if ours is None else (
+        "; GPS calibrated" if ours[2] else "; GPS not calibrated yet")
+    if peer is not None and gs.is_shm(peer[1]):
+        return "gps", f"locked to the GPS (offset {peer[3]:+.1f} ms){calibration}"
+    if gps is None:
+        role = "; the GPS isn't a time source yet"
+    elif peer is not None:
+        role = "; GPS standing by" + calibration
+    else:
+        role = calibration
+    if peer is not None:
+        return "net", f"synced over the Internet to {peer[1]} (offset {peer[3]:+.1f} ms){role}"
+    return "none", "not synchronized" + role
+
+
+def read_ntp_status():
+    try:
+        with open(NTP_GPS_FILE) as f:
+            text = f.read()
+    except OSError:
+        text = ""
+    return ntp_status(read_ntpq(), text)
 
 
 # ---------------------------------------------------------------- tracking
