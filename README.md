@@ -196,7 +196,8 @@ the host.
 Run `make hooks` once per clone.
 
 GitHub Actions runs lint, tests and the package build on every push to
-`main` and on pull requests, and keeps the `.deb` as a build artifact.
+any branch and on pull requests, and keeps the `.deb` as a build
+artifact.
 
 ## Releasing
 
