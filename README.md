@@ -38,6 +38,34 @@ include line too when no other `*.conf` is left in `conf.d`.
 Development builds kept the refclock in a marked block inside `ntp.conf`;
 that block is moved into the file.
 
+### Calibrating the GPS time
+
+The GPS reports the time in NMEA sentences sent over the serial (USB)
+line a little after the second they describe; the delay depends on the
+receiver, its baud rate and how many sentences it sends. ntpsec's
+`time1` on the refclock line subtracts a fixed delay, and the service
+measures it against network time once:
+
+1. After adding the refclock it waits 15 minutes for ntpd to settle.
+2. Then, every 64 seconds (one ntpd poll), it reads `ntpq -pn`. A sample
+   counts only while a network server is the source the clock follows
+   (`*`) and the GPS has answered its last eight polls (`reach 377`); if
+   either lapses, the samples collected so far are dropped.
+3. After 10 samples it takes their median offset. If that is 2 ms or
+   more, it sets `time1` to the current value minus the offset (a GPS
+   reading late shows a negative offset, so `time1` grows).
+4. It marks the file `calibrated=yes`, restarts ntpsec, and doesn't
+   measure again.
+
+On the sBitx this was written on (a u-blox 7 at 9600 baud) the GPS
+read 63.5 ms late; `time1` became `0.0635`, after which it agreed with
+the network servers to within a few milliseconds. With no network the
+GPS is used uncalibrated, about that much late, until the radio has had
+the Internet for about 20 minutes. To measure again, for example
+after changing the receiver or its settings, change `calibrated=yes` to
+`calibrated=no` in `/etc/ntpsec/conf.d/gps-station.conf` and run
+`sudo systemctl restart gps-station`.
+
 **Grid.** It works out the 6-character (or, with `--chars 4`,
 4-character) Maidenhead locator from the fix and sets it on the radio over
 TCP port 8081, retrying until the radio program answers and the new value
