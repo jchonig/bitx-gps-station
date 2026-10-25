@@ -80,17 +80,17 @@ package doesn't change gpsd's settings itself.
 Options go in `GPS_STATION_ARGS` in `/etc/default/gps-station`; restart
 the service after changing it.
 
-| Option              | Effect                                        |
-| ------------------- | --------------------------------------------- |
-| `--chars 4`         | send a 4-character grid instead of 6          |
-| `--no-ntp`          | only set the grid; leave ntpsec alone         |
-| `--no-grid`         | only look after ntpsec                        |
-| `--radio HOST:PORT` | radio software's port (`127.0.0.1:8081`)      |
-| `--gpsd HOST:PORT`  | gpsd's port (`127.0.0.1:2947`)                |
-| `--conf PATH`       | ntpsec config (`/etc/ntpsec/ntp.conf`)        |
-| `--conf-dir PATH`   | included directory (`/etc/ntpsec/conf.d`)      |
-| `--service NAME`    | ntpsec's systemd unit (`ntpsec`)              |
-| `--dry-run`         | change nothing; log what it would do          |
+| Option              | Effect                                    |
+| ------------------- | ----------------------------------------- |
+| `--chars 4`         | send a 4-character grid instead of 6      |
+| `--no-ntp`          | only set the grid; leave ntpsec alone     |
+| `--no-grid`         | only look after ntpsec                    |
+| `--radio HOST:PORT` | radio software's port (`127.0.0.1:8081`)  |
+| `--gpsd HOST:PORT`  | gpsd's port (`127.0.0.1:2947`)            |
+| `--conf PATH`       | ntpsec config (`/etc/ntpsec/ntp.conf`)    |
+| `--conf-dir PATH`   | included directory (`/etc/ntpsec/conf.d`) |
+| `--service NAME`    | ntpsec's systemd unit (`ntpsec`)          |
+| `--dry-run`         | change nothing; log what it would do      |
 
 `gps-station-desktop` takes `--radio`, `--gpsd` and `--chars` too. To
 give it options, copy `/etc/xdg/autostart/gps-station-desktop.desktop` to

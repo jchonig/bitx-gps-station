@@ -3,7 +3,7 @@
 IMAGE      := bitx-gps-station-build
 DOCKER     := docker run --rm -v "$(CURDIR)":/src -w /src
 RUN        := $(DOCKER) $(IMAGE)
-MDLINT     := davidanson/markdownlint-cli2:v0.14.0
+MDLINT     := davidanson/markdownlint-cli2:v0.24.0
 ACTIONLINT := rhysd/actionlint:1.7.4
 VERSION    := $(shell sed -n '1s/.*(\(.*\)).*/\1/p' debian/changelog)
 

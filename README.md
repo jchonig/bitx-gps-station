@@ -82,29 +82,38 @@ type on the radio yourself is left alone until you move.
 
 ## The desktop programs
 
-The tray icon starts when you log in to the radio's desktop and
-puts a GPS icon in the panel's tray. The crosshair shows the fix (grey
-none, blue 2D, green 3D); a dot at its bottom right shows where the time
-comes from (green the GPS, blue the Internet, red not synchronized); an
-amber "!" at the top right means a ticked program's grid differs from the
-GPS. Its tooltip says the same in words. Clicking it opens
-a window, kept off the taskbar, showing the GPS grid, the receiver's
-state (no fix, 2D or 3D fix; satellites used, heard with any signal and
-in view; the strongest signal) and a row for each supported program that
-is running, with a map of the sky: each satellite at its direction and
-height (horizon outside, overhead in the middle, north up), coloured by
-system, filled when used in the fix, a ring when only heard, grey when
-not heard, bigger for a stronger signal. Satellites whose position the
-receiver doesn't know yet are listed beside it. A Time line says what
-the clock follows: locked to the GPS, synced over the Internet (with the
-GPS standing by), or not synchronized, and whether the GPS has been
-calibrated. The window stays above
-the radio's full-screen window:
+The tray icon starts when you log in to the radio's desktop and puts a
+GPS icon in the panel's tray. The crosshair shows the fix (grey none,
+blue 2D, green 3D); a dot at its bottom right shows where the time comes
+from (green the GPS, blue the Internet, red not synchronized); an amber
+"!" at the top right means a ticked program's grid differs from the GPS.
+Its tooltip says the same in words.
+
+![Tray icon: no fix and time not synced; 2D fix with time over the
+Internet; 3D fix with a program's grid differing; 3D fix with time from
+the GPS](docs/images/tray-icons.png)
+
+Clicking it opens a window, kept off the taskbar and above the radio's
+full-screen window, showing:
+
+- the GPS grid, and the receiver's state: no fix, 2D or 3D fix;
+  satellites used, heard with any signal, and in view; the strongest
+  signal
+- a Time line saying what the clock follows (locked to the GPS, synced
+  over the Internet with the GPS standing by, or not synchronized) and
+  whether the GPS has been calibrated
+- a map of the sky: each satellite at its direction and height (horizon
+  outside, overhead in the middle, north up), coloured by system, filled
+  when used in the fix, a ring when only heard, grey when not heard,
+  bigger for a stronger signal; satellites whose position the receiver
+  doesn't know yet are listed beside it
+- a row for each supported program that is running
+
+![The GPS grid window on a zBitx](docs/images/window.png)
+
+With more programs running, the rows look like this:
 
 ```text
-GPS: FN31pr
-3D fix: 7 used, 9 heard of 11 in view (best 41 dB-Hz)
-Time: synced over the Internet to 192.0.2.10 (offset +0.4 ms); GPS standing by
 [x] Radio (zbitxre)  ✓ FN31pr                  [Update]
 [x] WSJT-X           ✗ AA11AA stale            [Update]
 [x] JS8Call          ✋ FN42aa set by hand     [Update]
@@ -112,20 +121,22 @@ Time: synced over the Internet to 192.0.2.10 (offset +0.4 ms); GPS standing by
 ```
 
 The window's **About** button (also on the tray icon's right-click
-menu) shows the release number and links to this repository and
-the author's page;
-`gps-station --version` and `gps-station-desktop --version` print it.
+menu) shows the release number and links to this repository and the
+author's page; `gps-station --version` and `gps-station-desktop
+--version` print the release number.
+
+![The About dialog](docs/images/about.png)
 
 Only programs that are running are looked at; a closed program is left
 alone, because the radio may have moved by the time it is opened again.
 Every 10 seconds each row is marked:
 
-| Mark | Meaning                                                            |
-| ---- | ------------------------------------------------------------------ |
-| ✓    | it has the GPS grid                                                |
+| Mark | Meaning                                                             |
+| ---- | ------------------------------------------------------------------- |
+| ✓    | it has the GPS grid                                                 |
 | ✗    | stale: it hasn't had the GPS grid since it started or the GPS moved |
-| ✋   | set by hand: it had the GPS grid, then somebody changed it         |
-| ?    | it can't report its grid while running                             |
+| ✋   | set by hand: it had the GPS grid, then somebody changed it          |
+| ?    | it can't report its grid while running                              |
 
 Only ticked programs are changed. A ticked program with a stale grid is
 updated; a grid set by hand is kept until the GPS moves to another square
@@ -137,15 +148,15 @@ starts unticked.
 
 What each program allows while it is running:
 
-| Program     | Read  | Set   | Settings needed in the program               |
-| ----------- | ----- | ----- | -------------------------------------------- |
-| Radio       | yes   | yes   | none                                         |
-| WSJT-X      | yes   | yes   | Accept UDP requests; AutoGrid next to My Grid |
-| JS8Call     | yes   | yes   | TCP server API on; Accept TCP requests        |
-| JTDX        | yes   | no    | none; set My Grid by hand                    |
-| fldigi      | no    | no    | none; check Configure, Operator              |
-| QSSTV       | no    | no    | none; check its configuration                |
-| GridTracker | —     | —     | follows WSJT-X / JTDX                        |
+| Program     | Read | Set | Settings needed in the program                |
+| ----------- | ---- | --- | --------------------------------------------- |
+| Radio       | yes  | yes | none                                          |
+| WSJT-X      | yes  | yes | Accept UDP requests; AutoGrid next to My Grid |
+| JS8Call     | yes  | yes | TCP server API on; Accept TCP requests        |
+| JTDX        | yes  | no  | none; set My Grid by hand                     |
+| fldigi      | no   | no  | none; check Configure, Operator               |
+| QSSTV       | no   | no  | none; check its configuration                 |
+| GridTracker | —    | —   | follows WSJT-X / JTDX                         |
 
 WSJT-X and JTDX are heard on the UDP address they send to (Settings,
 Reporting, UDP Server). GridTracker normally listens on that address too,
@@ -174,13 +185,13 @@ date by the `gps-station` service whether or not anyone is logged in.
 Everything runs in Docker through the Makefile; nothing is installed on
 the host.
 
-| Target       | Does                                               |
-| ------------ | -------------------------------------------------- |
-| `make lint`  | ruff, shellcheck, markdownlint, actionlint         |
-| `make test`  | pytest on Debian Bookworm's Python                 |
-| `make deb`   | builds and lintian-checks the `.deb` in `dist/`    |
+| Target       | Does                                                |
+| ------------ | --------------------------------------------------- |
+| `make lint`  | ruff, shellcheck, markdownlint, actionlint          |
+| `make test`  | pytest on Debian Bookworm's Python                  |
+| `make deb`   | builds and lintian-checks the `.deb` in `dist/`     |
 | `make repo`  | builds the apt repository in `public/` from `dist/` |
-| `make hooks` | runs `make lint` as a git pre-commit hook          |
+| `make hooks` | runs `make lint` as a git pre-commit hook           |
 
 Run `make hooks` once per clone.
 
