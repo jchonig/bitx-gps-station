@@ -1,13 +1,18 @@
-gps-station (0.1.0) stable; urgency=medium
+gps-station (0.2.0) stable; urgency=medium
 
   * First packaged release.
-  * gps-station-desktop: tray icon that shows and keeps the grid square of
-    running ham programs (radio, WSJT-X, JTDX, JS8Call, fldigi, QSSTV).
-  * Keep the GPS refclock in /etc/ntpsec/conf.d/gps-station.conf; ntp.conf
-    gets one line including every *.conf in conf.d. The file sets
-    "tos minsane 1" so the GPS alone can set the clock. Removing the
-    package takes them out again.
+  * gps-station: puts the GPS refclock in
+    /etc/ntpsec/conf.d/gps-station.conf, included once from ntp.conf, with
+    "tos minsane 1" so the GPS alone can set the clock; calibrates its
+    NMEA delay against network time once; warns when gpsd lacks -n; sets
+    the grid square on sbitx and zbitxre. Removing the package takes the
+    ntpsec changes out again.
+  * gps-station-desktop: tray icon showing the fix, the time source and
+    whether ticked programs match, with a window that keeps the grid square
+    of running ham programs (radio, WSJT-X, JTDX, JS8Call, fldigi, QSSTV),
+    shows a sky map of the satellites and what the clock follows.
   * gps-station-lo-multicast.service: turn on multicast for the loopback
     interface at boot, so WSJT-X can share its UDP stream on lo.
+  * Man pages for gps-station(8) and gps-station-desktop(1).
 
- -- Jeffrey Honig <jch@honig.net>  Sat, 24 Oct 2026 22:00:00 -0400
+ -- Jeffrey Honig <jch@honig.net>  Sun, 25 Oct 2026 14:00:00 -0400

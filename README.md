@@ -202,7 +202,7 @@ artifact.
 ## Releasing
 
 1. Add an entry to `debian/changelog` with the new version.
-2. Commit, then tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+2. Commit, then tag and push it: `git tag vX.Y.Z && git push origin vX.Y.Z`.
 
 The release workflow checks the tag against `debian/changelog`, lints,
 tests, builds the `.deb`, attaches it to a GitHub Release, and publishes
