@@ -38,6 +38,13 @@ def test_hostport(text, default, expect):
     assert gs.hostport(text, default) == expect
 
 
+def test_version(capsys, monkeypatch):
+    monkeypatch.setattr("sys.argv", ["gps-station", "--version"])
+    with pytest.raises(SystemExit):
+        gs.main()
+    assert capsys.readouterr().out.strip() == f"gps-station {gs.__version__}"
+
+
 # ---------------------------------------------------------------- radio
 
 ZBITXRE_GREETING = "FREQ 14074000\nMODE USB\nMYGRID FN31pr\n"

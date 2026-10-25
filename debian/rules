@@ -2,6 +2,8 @@
 
 LIB := usr/lib/gps-station
 
+include /usr/share/dpkg/pkg-info.mk
+
 %:
 	dh $@
 
@@ -33,6 +35,9 @@ override_dh_auto_install:
 	install -d debian/gps-station/usr/share/icons/hicolor/scalable/apps
 	install -m 644 desktop/icons/*.svg \
 		debian/gps-station/usr/share/icons/hicolor/scalable/apps/
+	sed -i 's|^__version__ = "dev"|__version__ = "$(DEB_VERSION)"|' \
+		debian/gps-station/$(LIB)/gps_station.py
+	grep -q '^__version__ = "$(DEB_VERSION)"' debian/gps-station/$(LIB)/gps_station.py
 	sed -i '1s|^#!.*|#!/usr/bin/python3|' \
 		debian/gps-station/$(LIB)/gps_station.py \
 		debian/gps-station/$(LIB)/gps_station_desktop.py

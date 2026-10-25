@@ -43,6 +43,9 @@ import statistics
 import subprocess
 import time
 
+__version__ = "dev"       # the package build puts the release number here
+HOMEPAGE = "https://github.com/jchonig/bitx-gps-station"
+
 GPSD = ("127.0.0.1", 2947)
 RADIO = ("127.0.0.1", 8081)
 NTP_CONF = "/etc/ntpsec/ntp.conf"
@@ -515,6 +518,7 @@ def hostport(s, default_port):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     ap.add_argument("--radio", default="127.0.0.1:8081", help="host:port of the radio")
     ap.add_argument("--gpsd", default="127.0.0.1:2947", help="host:port of gpsd")
     ap.add_argument("--chars", type=int, choices=(4, 6), default=6, help="grid length")

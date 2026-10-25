@@ -80,6 +80,10 @@ Time: synced over the Internet to 192.0.2.10 (offset +0.4 ms); GPS standing by
 [ ] fldigi           ? can't read              [Update]
 ```
 
+The window's **About** button (also on the tray icon's right-click
+menu) shows the release number and a link to this repository;
+`gps-station --version` and `gps-station-desktop --version` print it.
+
 Only programs that are running are looked at; a closed program is left
 alone, because the radio may have moved by the time it is opened again.
 Every 10 seconds each row is marked:

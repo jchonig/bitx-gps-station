@@ -219,6 +219,9 @@ class Window(Gtk.Window):
         box.pack_start(self.grid, True, True, 0)
         self.empty = Gtk.Label(label="No supported programs are running.", xalign=0)
         box.pack_start(self.empty, False, False, 0)
+        about = Gtk.Button(label="About", halign=Gtk.Align.END)
+        about.connect("clicked", lambda b: show_about(self))
+        box.pack_start(about, False, False, 0)
         self.set_default_size(560, -1)
         self.add(box)
         self.widgets = {}
@@ -289,6 +292,22 @@ class Window(Gtk.Window):
         w["button"].set_tooltip_text(tip)
 
 
+def show_about(parent):
+    d = Gtk.AboutDialog(transient_for=parent, modal=True)
+    d.set_program_name("gps-station")
+    d.set_version(gs.__version__)
+    d.set_comments("GPS time for ntpsec and the grid square for the radio and "
+                   "the ham programs running on an sBitx or zBitx.")
+    d.set_website(gs.HOMEPAGE)
+    d.set_website_label("github.com/jchonig/bitx-gps-station")
+    d.set_license_type(Gtk.License.BSD_3)
+    d.set_copyright("© 2026 Jeffrey Honig")
+    d.set_logo_icon_name("gps-station")
+    d.set_keep_above(True)
+    d.run()
+    d.destroy()
+
+
 def sky_legend(sats):
     """Markup beside the sky map: the key, and satellites with no position yet."""
     lines = ["<small>● used in the fix\n○ heard\n<span foreground='#999'>●</span> not heard"
@@ -336,9 +355,12 @@ class Tray:
         m = Gtk.Menu()
         show = Gtk.MenuItem(label="Show")
         show.connect("activate", lambda *a: self.toggle())
+        about = Gtk.MenuItem(label="About")
+        about.connect("activate", lambda *a: show_about(self.window))
         quit_ = Gtk.MenuItem(label="Quit")
         quit_.connect("activate", lambda *a: Gtk.main_quit())
         m.append(show)
+        m.append(about)
         m.append(quit_)
         m.show_all()
         m.popup(None, None, Gtk.StatusIcon.position_menu, icon, button, when)
@@ -352,6 +374,7 @@ class Tray:
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--version", action="version", version=f"%(prog)s {gs.__version__}")
     ap.add_argument("--radio", default="127.0.0.1:8081", help="host:port of the radio")
     ap.add_argument("--gpsd", default="127.0.0.1:2947", help="host:port of gpsd")
     ap.add_argument("--chars", type=int, choices=(4, 6), default=6, help="grid length")
