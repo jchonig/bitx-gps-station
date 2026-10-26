@@ -1,8 +1,12 @@
 # bitx-gps-station
 
-Sets the clock and the grid square from a GPS on an sBitx or zBitx, running
-either the original sbitx software or the refactored zbitxre, and keeps
-the ham programs running on its desktop on the same grid square.
+A GPS companion for the sBitx and zBitx, running either the original sbitx
+software or the refactored zbitxre. It:
+
+1. Keeps the radio's clock right from the GPS when network time isn't
+   available.
+2. Keeps the grid square up to date in the radio and in the ham programs
+   running on it, such as WSJT-X and JS8Call.
 
 It has two parts, in one package:
 
@@ -61,10 +65,8 @@ On the sBitx this was written on (a u-blox 7 at 9600 baud) the GPS
 read 63.5 ms late; `time1` became `0.0635`, after which it agreed with
 the network servers to within a few milliseconds. With no network the
 GPS is used uncalibrated, about that much late, until the radio has had
-the Internet for about 20 minutes. To measure again, for example
-after changing the receiver or its settings, change `calibrated=yes` to
-`calibrated=no` in `/etc/ntpsec/conf.d/gps-station.conf` and run
-`sudo systemctl restart gps-station`.
+the Internet for about 20 minutes. To measure again, see
+[Recalibrating the GPS time](docs/INSTALL.md#recalibrating-the-gps-time).
 
 **Grid.** It works out the 6-character (or, with `--chars 4`,
 4-character) Maidenhead locator from the fix and sets it on the radio over
@@ -79,6 +81,42 @@ reads back:
 A new grid is sent only after it has held for a minute, so a fix
 wandering along a grid line doesn't flip it back and forth, and a grid you
 type on the radio yourself is left alone until you move.
+
+## GPS receivers
+
+gps-station reads the GPS through gpsd, so any receiver gpsd supports
+works. What varies is whether gpsd picks it up by itself when it's
+plugged in. Raspberry Pi OS (Trixie, gpsd 3.25) starts gpsd automatically
+for these USB receivers, matched by USB ID in gpsd's
+`/usr/lib/udev/rules.d/60-gpsd.rules`:
+
+| Receiver                                     | USB ID                |
+| -------------------------------------------- | --------------------- |
+| u-blox 5, 6, 7, 8 and 9 with their own USB   | `1546:01a5` to `01a9` |
+| Garmin USB, such as the GPS 18 USB           | `091e:0003`           |
+| MediaTek-based, such as the Holux M-1200E    | `0e8d:3329`           |
+| DeLorme (Cypress M8 chip), such as the LT-40 | `1163:0100`, `0200`   |
+| PS-360 (sold with MS Streets and Trips 2005) | `067b:aaa0`           |
+| ATEN UC-232A serial adapter                  | `0557:2008`           |
+| Telit wireless modules                       | by USB interface      |
+
+The common cheap USB "u-blox 7" dongles are in the first row; the zBitx
+this was written on uses one.
+
+Not detected automatically:
+
+- Receivers built on a general USB-serial chip: Prolific PL2303, FTDI
+  FT232 or Silicon Labs CP210x. Debian turns those rules off because the
+  same chips are in many devices that aren't GPS receivers.
+- A GPS module on the Pi's serial pins.
+
+For those, gpsd has to be told where the receiver is; see
+[Configuring gpsd](docs/INSTALL.md#configuring-gpsd), which also covers
+the `-n` option the time job needs.
+
+gps-station uses the time in the receiver's NMEA messages, not a PPS
+signal; after calibration it agrees with network time to within a few
+milliseconds, plenty for FT8 and the other digital modes.
 
 ## The desktop programs
 
@@ -148,34 +186,20 @@ starts unticked.
 
 What each program allows while it is running:
 
-| Program     | Read | Set | Settings needed in the program                |
-| ----------- | ---- | --- | --------------------------------------------- |
-| Radio       | yes  | yes | none                                          |
-| WSJT-X      | yes  | yes | Accept UDP requests; AutoGrid next to My Grid |
-| JS8Call     | yes  | yes | TCP server API on; Accept TCP requests        |
-| JTDX        | yes  | no  | none; set My Grid by hand                     |
-| fldigi      | no   | no  | none; check Configure, Operator               |
-| QSSTV       | no   | no  | none; check its configuration                 |
-| GridTracker | —    | —   | follows WSJT-X / JTDX                         |
+| Program     | Read | Set |
+| ----------- | ---- | --- |
+| Radio       | yes  | yes |
+| WSJT-X      | yes  | yes |
+| JS8Call     | yes  | yes |
+| JTDX        | yes  | no  |
+| fldigi      | no   | no  |
+| QSSTV       | no   | no  |
+| GridTracker | —    | —   |
 
-WSJT-X and JTDX are heard on the UDP address they send to (Settings,
-Reporting, UDP Server). GridTracker normally listens on that address too,
-and only one program can listen on a plain address such as
-`127.0.0.1:2237`; the WSJT-X row then says the port is taken. To share
-it, use a multicast address, which any number of programs can hear:
-
-1. WSJT-X (and JTDX): Settings, Reporting: UDP Server `239.255.0.1`,
-   port `2237`, Outgoing interfaces `lo`.
-2. GridTracker2: turn on Multicast and give it the same address.
-
-Linux leaves multicast off on the loopback interface, so WSJT-X doesn't
-offer `lo` until it is on. The package's `gps-station-lo-multicast`
-service turns it on at boot (`ip link set dev lo multicast on`); using
-`lo` keeps the stream on the radio and working without Wi-Fi. Restart
-WSJT-X after the first install so it sees the change.
-
-gps-station-desktop reads the address from WSJT-X's settings and joins
-the group on every interface, so it needs no setting of its own.
+GridTracker follows WSJT-X and JTDX. WSJT-X and JS8Call have to allow
+changes, and sharing WSJT-X's messages with GridTracker needs a
+multicast address; the settings for each program are in
+[Configuring the ham programs](docs/INSTALL.md#configuring-the-ham-programs).
 
 The radio's row reads the radio over port 8081; the radio is kept up to
 date by the `gps-station` service whether or not anyone is logged in.
